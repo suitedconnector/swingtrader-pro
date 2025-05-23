@@ -1,5 +1,6 @@
 import { Express } from "express";
 import { createServer } from "http";
+import { exec } from "child_process";
 import { storage } from "./storage";
 
 export async function registerRoutes(app: Express) {
@@ -231,41 +232,19 @@ export async function registerRoutes(app: Express) {
   });
 
   // Technical analysis endpoint using yfinance  
-  app.get('/api/technical-analysis/:symbol', (req, res) => {
-    const { symbol } = req.params;
-    console.log(`Running technical analysis for ${symbol} with yfinance`);
-    
-    const { exec } = require('child_process');
-    const pythonPath = '/home/runner/workspace/.pythonlibs/bin/python3';
-    const scriptPath = './server/technical_analysis.py';
-    const command = `${pythonPath} ${scriptPath} ${symbol.toUpperCase()}`;
-    
-    exec(command, (error: any, stdout: string, stderr: string) => {
-      if (error) {
-        console.error(`yfinance script error: ${error.message}`);
-        return res.status(500).json({ message: 'Technical analysis failed' });
-      }
+  app.get('/api/technical-analysis/:symbol', async (req, res) => {
+    try {
+      const { symbol } = req.params;
+      console.log(`Running technical analysis for ${symbol} with yfinance`);
       
-      if (stderr) {
-        console.error(`yfinance stderr: ${stderr}`);
-      }
+      const { runYfinanceAnalysis } = require('./yfinance_analysis.js');
+      const result = await runYfinanceAnalysis(symbol);
       
-      try {
-        const result = JSON.parse(stdout.trim());
-        
-        if (result.error) {
-          console.log(`Analysis error for ${symbol}:`, result.error);
-          return res.status(404).json({ message: result.error });
-        }
-        
-        console.log(`yfinance analysis completed for ${symbol}: ${result.scorePercentage}% score`);
-        res.json(result);
-      } catch (parseError) {
-        console.error('Failed to parse yfinance output:', parseError);
-        console.error('Raw output:', stdout);
-        res.status(500).json({ message: 'Failed to parse analysis results' });
-      }
-    });
+      res.json(result);
+    } catch (error) {
+      console.error('Technical analysis error:', error);
+      res.status(500).json({ message: error.message || 'Failed to perform technical analysis' });
+    }
   });
 
   // Market data endpoint (simulated)
