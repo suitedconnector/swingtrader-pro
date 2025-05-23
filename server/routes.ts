@@ -287,6 +287,13 @@ export async function registerRoutes(app: Express) {
         priceChange30d: (Math.random() * 20 - 10).toFixed(1),
         volume: Math.floor(Math.random() * 50000000 + 1000000)
       },
+      criteria: {
+        ma_alignment: { value: indicators.sma10 === 'bullish', label: 'Moving Average Alignment' },
+        volume_trend: { value: indicators.volume === 'high', label: 'Volume Above Average' },
+        price_trend: { value: indicators.trend.includes('uptrend'), label: 'Upward Price Trend' },
+        support_level: { value: score > 60, label: 'Above Key Support' },
+        momentum: { value: score > 70, label: 'Positive Momentum' }
+      },
       analysis: `${symbol} shows ${score > 60 ? 'positive' : 'mixed'} technical signals with ${score}% confidence score.`
     };
   }
