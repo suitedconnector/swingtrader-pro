@@ -36,10 +36,32 @@ export function PreEntryPhase() {
     },
   });
 
+  const removeFromWatchlistMutation = useMutation({
+    mutationFn: ({ watchlistId, symbol }: { watchlistId: number; symbol: string }) => {
+      const watchlist = watchlists.find(w => w.id === watchlistId);
+      if (!watchlist) throw new Error('Watchlist not found');
+      
+      const updatedSymbols = watchlist.symbols.filter(s => s !== symbol);
+      return apiRequest('PATCH', `/api/watchlists/${watchlistId}`, {
+        symbols: updatedSymbols
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/watchlists'] });
+    },
+  });
+
   const handleCreateAlert = (e: React.FormEvent) => {
     e.preventDefault();
     if (alertForm.symbol && alertForm.targetPrice) {
       createAlertMutation.mutate(alertForm);
+    }
+  };
+
+  const handleRemoveFromWatchlist = (symbol: string, watchlistType: 'focus' | 'flagged') => {
+    const watchlist = watchlists.find(w => w.type === watchlistType);
+    if (watchlist) {
+      removeFromWatchlistMutation.mutate({ watchlistId: watchlist.id, symbol });
     }
   };
 
@@ -63,9 +85,17 @@ export function PreEntryPhase() {
               {focusList?.symbols.length ? (
                 <div className="flex flex-wrap gap-2">
                   {focusList.symbols.map((symbol) => (
-                    <span key={symbol} className="px-2 py-1 bg-trading-primary text-white text-xs rounded">
-                      {symbol}
-                    </span>
+                    <div key={symbol} className="flex items-center gap-1 px-2 py-1 bg-trading-primary text-white text-xs rounded">
+                      <span>{symbol}</span>
+                      <button
+                        onClick={() => handleRemoveFromWatchlist(symbol, 'focus')}
+                        disabled={removeFromWatchlistMutation.isPending}
+                        className="ml-1 text-white hover:text-red-200 text-xs font-bold"
+                        title="Remove from Focus List"
+                      >
+                        ×
+                      </button>
+                    </div>
                   ))}
                 </div>
               ) : (
@@ -78,9 +108,17 @@ export function PreEntryPhase() {
               {flaggedList?.symbols.length ? (
                 <div className="flex flex-wrap gap-2">
                   {flaggedList.symbols.map((symbol) => (
-                    <span key={symbol} className="px-2 py-1 bg-gray-500 text-white text-xs rounded">
-                      {symbol}
-                    </span>
+                    <div key={symbol} className="flex items-center gap-1 px-2 py-1 bg-gray-500 text-white text-xs rounded">
+                      <span>{symbol}</span>
+                      <button
+                        onClick={() => handleRemoveFromWatchlist(symbol, 'flagged')}
+                        disabled={removeFromWatchlistMutation.isPending}
+                        className="ml-1 text-white hover:text-red-200 text-xs font-bold"
+                        title="Remove from Flagged List"
+                      >
+                        ×
+                      </button>
+                    </div>
                   ))}
                 </div>
               ) : (
