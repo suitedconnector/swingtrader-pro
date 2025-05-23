@@ -258,6 +258,145 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Comprehensive technical analysis endpoint
+  app.get('/api/technical-analysis/:symbol', async (req, res) => {
+    try {
+      const { symbol } = req.params;
+      const apiKey = process.env.ALPHA_VANTAGE_API_KEY;
+      
+      if (!apiKey) {
+        return res.status(500).json({ message: 'API key not configured' });
+      }
+
+      // Fetch daily price data for technical analysis
+      const dailyResponse = await fetch(`https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${symbol.toUpperCase()}&apikey=${apiKey}&outputsize=full`);
+      const dailyData = await dailyResponse.json();
+      
+      if (!dailyData['Time Series (Daily)']) {
+        return res.status(404).json({ message: 'Stock data not found' });
+      }
+
+      const timeSeriesData = dailyData['Time Series (Daily)'];
+      const dates = Object.keys(timeSeriesData).sort().reverse(); // Most recent first
+      
+      if (dates.length < 200) {
+        return res.status(400).json({ message: 'Insufficient data for analysis' });
+      }
+
+      // Calculate moving averages and technical indicators
+      const prices = dates.slice(0, 200).map(date => ({
+        date,
+        close: parseFloat(timeSeriesData[date]['4. close']),
+        high: parseFloat(timeSeriesData[date]['2. high']),
+        low: parseFloat(timeSeriesData[date]['3. low']),
+        volume: parseInt(timeSeriesData[date]['5. volume'])
+      }));
+
+      const currentPrice = prices[0].close;
+      
+      // Calculate SMAs
+      const sma10 = prices.slice(0, 10).reduce((sum, p) => sum + p.close, 0) / 10;
+      const sma20 = prices.slice(0, 20).reduce((sum, p) => sum + p.close, 0) / 20;
+      const sma50 = prices.slice(0, 50).reduce((sum, p) => sum + p.close, 0) / 50;
+      const sma200 = prices.slice(0, 200).reduce((sum, p) => sum + p.close, 0) / 200;
+
+      // Calculate recent performance
+      const priceChange30Days = ((currentPrice - prices[29].close) / prices[29].close) * 100;
+      const avgVolume20Days = prices.slice(0, 20).reduce((sum, p) => sum + p.volume, 0) / 20;
+      const currentVolume = prices[0].volume;
+
+      // Analyze recent lows for higher lows pattern
+      const recentLows = prices.slice(0, 20).map(p => p.low);
+      const isHigherLows = recentLows[0] > Math.min(...recentLows.slice(5, 15));
+
+      // Technical criteria evaluation
+      const analysis = {
+        symbol: symbol.toUpperCase(),
+        currentPrice: currentPrice.toFixed(2),
+        technicalScore: 0,
+        maxScore: 10,
+        criteria: {
+          initialMove: {
+            value: priceChange30Days >= 30,
+            description: `30-day move: ${priceChange30Days.toFixed(1)}%`,
+            weight: 2
+          },
+          pullbackConsolidation: {
+            value: currentPrice < prices[5].close && currentPrice > sma20,
+            description: "Orderly pullback from recent highs",
+            weight: 1
+          },
+          higherLows: {
+            value: isHigherLows,
+            description: "Higher lows pattern detected",
+            weight: 1
+          },
+          holdingSMA: {
+            value: currentPrice > sma10 && currentPrice > sma20,
+            description: "Holding above 10/20 SMA during pullback",
+            weight: 1
+          },
+          volumeDrying: {
+            value: currentVolume < avgVolume20Days * 0.8,
+            description: `Volume: ${(currentVolume/1000000).toFixed(1)}M vs avg ${(avgVolume20Days/1000000).toFixed(1)}M`,
+            weight: 1
+          },
+          sma10Above20: {
+            value: sma10 > sma20,
+            description: `10 SMA (${sma10.toFixed(2)}) > 20 SMA (${sma20.toFixed(2)})`,
+            weight: 1
+          },
+          sma20Above50: {
+            value: sma20 > sma50,
+            description: `20 SMA (${sma20.toFixed(2)}) > 50 SMA (${sma50.toFixed(2)})`,
+            weight: 1
+          },
+          sma50Above200: {
+            value: sma50 > sma200,
+            description: `50 SMA (${sma50.toFixed(2)}) > 200 SMA (${sma200.toFixed(2)})`,
+            weight: 1
+          },
+          priceAbove200: {
+            value: currentPrice > sma200,
+            description: `Price (${currentPrice.toFixed(2)}) > 200 SMA (${sma200.toFixed(2)})`,
+            weight: 1
+          }
+        },
+        marketData: {
+          sma10: sma10.toFixed(2),
+          sma20: sma20.toFixed(2),
+          sma50: sma50.toFixed(2),
+          sma200: sma200.toFixed(2),
+          volume: currentVolume,
+          avgVolume: Math.round(avgVolume20Days),
+          priceChange30d: priceChange30Days.toFixed(1)
+        }
+      };
+
+      // Calculate total score
+      let totalScore = 0;
+      let maxPossibleScore = 0;
+      
+      Object.values(analysis.criteria).forEach(criterion => {
+        maxPossibleScore += criterion.weight;
+        if (criterion.value) {
+          totalScore += criterion.weight;
+        }
+      });
+
+      analysis.technicalScore = totalScore;
+      analysis.maxScore = maxPossibleScore;
+      
+      const scorePercentage = Math.round((totalScore / maxPossibleScore) * 100);
+      const finalAnalysis = { ...analysis, scorePercentage };
+
+      res.json(finalAnalysis);
+    } catch (error) {
+      console.error('Technical analysis error:', error);
+      res.status(500).json({ message: 'Failed to perform technical analysis' });
+    }
+  });
+
   // Market data endpoint (simulated)
   app.get("/api/market-data", async (req, res) => {
     try {

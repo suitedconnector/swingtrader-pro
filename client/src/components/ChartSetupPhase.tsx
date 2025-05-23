@@ -9,21 +9,8 @@ import type { Watchlist } from '@shared/schema';
 export function ChartSetupPhase() {
   const { theme } = useTheme();
   const [selectedStock, setSelectedStock] = useState<string>('');
-  const [technicalChecklist, setTechnicalChecklist] = useState({
-    initialMove: false,
-    pullback: false,
-    higherLows: false,
-    holdingSMA: false,
-    volumeDrying: false,
-  });
-
-  const [maAlignment, setMaAlignment] = useState({
-    sma10Above20: false,
-    sma20Above50: false,
-    sma50Above200: false,
-    priceAbove200: false,
-    marketTrending: false,
-  });
+  const [analysisData, setAnalysisData] = useState<any>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   const { data: watchlists = [] } = useQuery<Watchlist[]>({
     queryKey: ['/api/watchlists'],
@@ -34,12 +21,46 @@ export function ChartSetupPhase() {
     return [...stocks, ...watchlist.symbols];
   }, []);
 
-  const handleTechnicalChange = (key: keyof typeof technicalChecklist) => {
-    setTechnicalChecklist(prev => ({ ...prev, [key]: !prev[key] }));
+  const runTechnicalAnalysis = async (symbol: string) => {
+    if (!symbol) return;
+    
+    setIsAnalyzing(true);
+    try {
+      const response = await fetch(`/api/technical-analysis/${symbol}`);
+      const data = await response.json();
+      
+      if (response.ok) {
+        setAnalysisData(data);
+      } else {
+        console.error('Analysis failed:', data.message);
+        setAnalysisData(null);
+      }
+    } catch (error) {
+      console.error('Error running analysis:', error);
+      setAnalysisData(null);
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
-  const handleMAChange = (key: keyof typeof maAlignment) => {
-    setMaAlignment(prev => ({ ...prev, [key]: !prev[key] }));
+  const handleStockChange = (symbol: string) => {
+    setSelectedStock(symbol);
+    setAnalysisData(null);
+    if (symbol) {
+      runTechnicalAnalysis(symbol);
+    }
+  };
+
+  const getScoreColor = (percentage: number) => {
+    if (percentage >= 80) return 'text-green-600 dark:text-green-400';
+    if (percentage >= 60) return 'text-yellow-600 dark:text-yellow-400';
+    return 'text-red-600 dark:text-red-400';
+  };
+
+  const getScoreBackground = (percentage: number) => {
+    if (percentage >= 80) return 'bg-green-100 dark:bg-green-900/20';
+    if (percentage >= 60) return 'bg-yellow-100 dark:bg-yellow-900/20';
+    return 'bg-red-100 dark:bg-red-900/20';
   };
 
   return (
@@ -49,107 +70,104 @@ export function ChartSetupPhase() {
         Phase 2: Daily Chart Setup Analysis
       </h3>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="space-y-4">
-          <h4 className="font-medium text-gray-900 dark:text-white">Technical Analysis Checklist</h4>
-          <div className="space-y-3">
-            <label className="flex items-center space-x-3">
-              <Checkbox
-                checked={technicalChecklist.initialMove}
-                onCheckedChange={() => handleTechnicalChange('initialMove')}
-              />
-              <span className="text-sm">Initial move up ≥30%</span>
-            </label>
-            <label className="flex items-center space-x-3">
-              <Checkbox
-                checked={technicalChecklist.pullback}
-                onCheckedChange={() => handleTechnicalChange('pullback')}
-              />
-              <span className="text-sm">Orderly pullback/consolidation</span>
-            </label>
-            <label className="flex items-center space-x-3">
-              <Checkbox
-                checked={technicalChecklist.higherLows}
-                onCheckedChange={() => handleTechnicalChange('higherLows')}
-              />
-              <span className="text-sm">Higher lows pattern</span>
-            </label>
-            <label className="flex items-center space-x-3">
-              <Checkbox
-                checked={technicalChecklist.holdingSMA}
-                onCheckedChange={() => handleTechnicalChange('holdingSMA')}
-              />
-              <span className="text-sm">Holding 10/20 SMA during pullback</span>
-            </label>
-            <label className="flex items-center space-x-3">
-              <Checkbox
-                checked={technicalChecklist.volumeDrying}
-                onCheckedChange={() => handleTechnicalChange('volumeDrying')}
-              />
-              <span className="text-sm">Volume drying up</span>
-            </label>
+      {/* Stock Selection */}
+      <div className="flex items-center space-x-4 mb-6">
+        <h4 className="font-medium text-gray-900 dark:text-white">Select Stock to Analyze:</h4>
+        <Select value={selectedStock} onValueChange={handleStockChange}>
+          <SelectTrigger className="w-48">
+            <SelectValue placeholder="Choose a stock" />
+          </SelectTrigger>
+          <SelectContent>
+            {allStocks.map((symbol) => (
+              <SelectItem key={symbol} value={symbol}>
+                {symbol}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {isAnalyzing && (
+          <div className="flex items-center space-x-2">
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-trading-primary"></div>
+            <span className="text-sm text-gray-600 dark:text-gray-400">Analyzing...</span>
           </div>
-        </div>
-        
-        <div className="space-y-4">
-          <h4 className="font-medium text-gray-900 dark:text-white">Moving Average Alignment</h4>
-          <div className="space-y-3">
-            <label className="flex items-center space-x-3">
-              <Checkbox
-                checked={maAlignment.sma10Above20}
-                onCheckedChange={() => handleMAChange('sma10Above20')}
-              />
-              <span className="text-sm">10 SMA {'>'} 20 SMA</span>
-            </label>
-            <label className="flex items-center space-x-3">
-              <Checkbox
-                checked={maAlignment.sma20Above50}
-                onCheckedChange={() => handleMAChange('sma20Above50')}
-              />
-              <span className="text-sm">20 SMA {'>'} 50 SMA</span>
-            </label>
-            <label className="flex items-center space-x-3">
-              <Checkbox
-                checked={maAlignment.sma50Above200}
-                onCheckedChange={() => handleMAChange('sma50Above200')}
-              />
-              <span className="text-sm">50 SMA {'>'} 200 SMA</span>
-            </label>
-            <label className="flex items-center space-x-3">
-              <Checkbox
-                checked={maAlignment.priceAbove200}
-                onCheckedChange={() => handleMAChange('priceAbove200')}
-              />
-              <span className="text-sm">Price above 200 SMA</span>
-            </label>
-            <label className="flex items-center space-x-3">
-              <Checkbox
-                checked={maAlignment.marketTrending}
-                onCheckedChange={() => handleMAChange('marketTrending')}
-              />
-              <span className="text-sm">Market trending higher</span>
-            </label>
-          </div>
-        </div>
+        )}
       </div>
 
-      <div className="mt-6 space-y-4">
-        <div className="flex items-center space-x-4">
-          <h4 className="font-medium text-gray-900 dark:text-white">Select Stock to Analyze:</h4>
-          <Select value={selectedStock} onValueChange={setSelectedStock}>
-            <SelectTrigger className="w-48">
-              <SelectValue placeholder="Choose a stock" />
-            </SelectTrigger>
-            <SelectContent>
-              {allStocks.map((symbol) => (
-                <SelectItem key={symbol} value={symbol}>
-                  {symbol}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+      {/* Analysis Results */}
+      {analysisData && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+          {/* Overall Score */}
+          <div className={`rounded-lg p-4 ${getScoreBackground(analysisData.scorePercentage || 0)}`}>
+            <h4 className="font-medium text-gray-900 dark:text-white mb-2">Technical Score</h4>
+            <div className={`text-3xl font-bold ${getScoreColor(analysisData.scorePercentage || 0)}`}>
+              {analysisData.scorePercentage || 0}%
+            </div>
+            <div className="text-sm text-gray-600 dark:text-gray-400">
+              {analysisData.technicalScore}/{analysisData.maxScore} criteria met
+            </div>
+          </div>
 
+          {/* Key Metrics */}
+          <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+            <h4 className="font-medium text-gray-900 dark:text-white mb-2">Key Metrics</h4>
+            <div className="space-y-1 text-sm">
+              <div>Current Price: <span className="font-mono">${analysisData.currentPrice}</span></div>
+              <div>30-day Move: <span className="font-mono">{analysisData.marketData.priceChange30d}%</span></div>
+              <div>Volume: <span className="font-mono">{(analysisData.marketData.volume/1000000).toFixed(1)}M</span></div>
+            </div>
+          </div>
+
+          {/* Moving Averages */}
+          <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+            <h4 className="font-medium text-gray-900 dark:text-white mb-2">Moving Averages</h4>
+            <div className="space-y-1 text-sm">
+              <div>10 SMA: <span className="font-mono">${analysisData.marketData.sma10}</span></div>
+              <div>20 SMA: <span className="font-mono">${analysisData.marketData.sma20}</span></div>
+              <div>50 SMA: <span className="font-mono">${analysisData.marketData.sma50}</span></div>
+              <div>200 SMA: <span className="font-mono">${analysisData.marketData.sma200}</span></div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Detailed Criteria Analysis */}
+      {analysisData && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+          <div className="space-y-4">
+            <h4 className="font-medium text-gray-900 dark:text-white">Technical Analysis Results</h4>
+            <div className="space-y-3">
+              {Object.entries(analysisData.criteria).slice(0, 5).map(([key, criterion]: [string, any]) => (
+                <div key={key} className="flex items-center space-x-3">
+                  <Checkbox checked={criterion.value} disabled />
+                  <div className="flex-1">
+                    <span className="text-sm">{criterion.description}</span>
+                    {criterion.weight > 1 && (
+                      <span className="ml-2 px-1.5 py-0.5 text-xs bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded">
+                        High Priority
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          
+          <div className="space-y-4">
+            <h4 className="font-medium text-gray-900 dark:text-white">Moving Average Analysis</h4>
+            <div className="space-y-3">
+              {Object.entries(analysisData.criteria).slice(5).map(([key, criterion]: [string, any]) => (
+                <div key={key} className="flex items-center space-x-3">
+                  <Checkbox checked={criterion.value} disabled />
+                  <span className="text-sm">{criterion.description}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Chart Section */}
+      <div className="mt-6 space-y-4">
         {selectedStock && (
           <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
             <TradingViewChart
@@ -173,7 +191,7 @@ export function ChartSetupPhase() {
         {!selectedStock && allStocks.length > 0 && (
           <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-8 text-center">
             <i className="fas fa-chart-line text-4xl text-gray-400 mb-4"></i>
-            <p className="text-gray-600 dark:text-gray-400">Select a stock from the dropdown to view its chart</p>
+            <p className="text-gray-600 dark:text-gray-400">Select a stock from the dropdown to view its chart and get automatic analysis</p>
           </div>
         )}
       </div>
