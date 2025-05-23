@@ -219,6 +219,7 @@ export class MemStorage implements IStorage {
     const alert: PriceAlert = {
       ...insertAlert,
       id,
+      isActive: insertAlert.isActive !== undefined ? insertAlert.isActive : true,
       createdAt: new Date()
     };
     this.priceAlerts.set(id, alert);
@@ -248,6 +249,8 @@ export class MemStorage implements IStorage {
     const result: ScanResult = {
       ...insertResult,
       id,
+      adr: insertResult.adr || null,
+      dollarVolume: insertResult.dollarVolume || null,
       createdAt: new Date()
     };
     this.scanResults.set(id, result);
@@ -256,11 +259,17 @@ export class MemStorage implements IStorage {
 
   async clearOldScanResults(): Promise<void> {
     const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    for (const [id, result] of this.scanResults.entries()) {
+    const entriesToDelete: number[] = [];
+    
+    this.scanResults.forEach((result, id) => {
       if (result.createdAt && result.createdAt < oneDayAgo) {
-        this.scanResults.delete(id);
+        entriesToDelete.push(id);
       }
-    }
+    });
+    
+    entriesToDelete.forEach(id => {
+      this.scanResults.delete(id);
+    });
   }
 }
 
