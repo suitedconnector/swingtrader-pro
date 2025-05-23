@@ -292,7 +292,12 @@ export async function registerRoutes(app: Express) {
         volume_trend: { value: indicators.volume === 'high', label: 'Volume Above Average' },
         price_trend: { value: indicators.trend.includes('uptrend'), label: 'Upward Price Trend' },
         support_level: { value: score > 60, label: 'Above Key Support' },
-        momentum: { value: score > 70, label: 'Positive Momentum' }
+        momentum: { value: score > 70, label: 'Positive Momentum' },
+        price_above_10ma: { value: indicators.sma10 === 'bullish', label: 'Price Above 10-day MA' },
+        price_above_20ma: { value: indicators.sma20 === 'bullish', label: 'Price Above 20-day MA' },
+        ma_10_above_20: { value: indicators.sma10 === 'bullish' && indicators.sma20 === 'bullish', label: '10-day MA Above 20-day MA' },
+        ma_20_above_50: { value: indicators.sma20 === 'bullish' && indicators.sma50 === 'bullish', label: '20-day MA Above 50-day MA' },
+        long_term_trend: { value: indicators.sma200 === 'bullish', label: 'Above 200-day MA (Long-term Bullish)' }
       },
       analysis: `${symbol} shows ${score > 60 ? 'positive' : 'mixed'} technical signals with ${score}% confidence score.`
     };
