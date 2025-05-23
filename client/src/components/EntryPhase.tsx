@@ -62,15 +62,26 @@ export function EntryPhase() {
   // Function to automatically calculate entry and stop loss prices using yfinance
   const calculateOptimalPrices = async (symbol: string) => {
     setIsCalculatingPrices(true);
+    console.log(`Starting price calculation for ${symbol}`);
+    
     try {
       // Get current market data using yfinance (same as technical analysis)
       const response = await fetch(`/api/yfinance-price/${symbol}`);
+      console.log('Response status:', response.status);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const data = await response.json();
+      console.log('Received data:', data);
       
       if (data.currentPrice) {
         const currentPrice = parseFloat(data.currentPrice);
         const dayHigh = parseFloat(data.dayHigh) || currentPrice;
         const dayLow = parseFloat(data.dayLow) || currentPrice;
+        
+        console.log(`Current: $${currentPrice}, High: $${dayHigh}, Low: $${dayLow}`);
         
         // Calculate entry price: breakout above day high or 2% above current price
         const breakoutEntry = Math.max(dayHigh * 1.01, currentPrice * 1.02);
@@ -82,12 +93,15 @@ export function EntryPhase() {
         let reasoning = `Entry: $${suggestedEntry.toFixed(2)} (breakout above $${currentPrice.toFixed(2)} current price). `;
         reasoning += `Stop: $${suggestedStopLoss.toFixed(2)} (8% below entry for swing trading).`;
         
-        setPriceCalculations({
+        const calculations = {
           currentPrice,
           suggestedEntry,
           suggestedStopLoss,
           reasoning
-        });
+        };
+        
+        console.log('Setting price calculations:', calculations);
+        setPriceCalculations(calculations);
         
         // Auto-populate the form
         setPositionForm(prev => ({
@@ -95,6 +109,10 @@ export function EntryPhase() {
           entryPrice: suggestedEntry.toFixed(2),
           stopLoss: suggestedStopLoss.toFixed(2)
         }));
+        
+        console.log('Price calculation completed successfully');
+      } else {
+        console.error('No currentPrice in response data');
       }
     } catch (error) {
       console.error('Error calculating prices:', error);
