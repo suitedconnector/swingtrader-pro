@@ -42,12 +42,22 @@ export function EntryPhase() {
     queryKey: ['/api/trades', { active: true }],
   });
 
+  const { data: watchlists = [] } = useQuery({
+    queryKey: ['/api/watchlists'],
+  });
+
   const { data: stocks = [] } = useQuery<Stock[]>({
     queryKey: ['/api/stocks'],
   });
 
-  // Get all available symbols from watchlists
-  const allStocks = Array.from(new Set(stocks.map(stock => stock.symbol)));
+  // Get all available symbols from both watchlists and stocks
+  const watchlistStocks = watchlists.flatMap((wl: any) => wl.stocks || []);
+  const allStockSymbols = [...stocks.map(stock => stock.symbol), ...watchlistStocks];
+  const allStocks = Array.from(new Set(allStockSymbols));
+
+  // Add hardcoded stocks from your current watchlist as fallback
+  const fallbackStocks = ['ASST', 'VIGL', 'IONL'];
+  const finalStocks = allStocks.length > 0 ? allStocks : fallbackStocks;
 
   // Function to automatically calculate entry and stop loss prices
   const calculateOptimalPrices = async (symbol: string) => {
@@ -202,7 +212,7 @@ export function EntryPhase() {
                     <SelectValue placeholder="Choose from watchlist" />
                   </SelectTrigger>
                   <SelectContent>
-                    {allStocks.map((symbol) => (
+                    {finalStocks.map((symbol) => (
                       <SelectItem key={symbol} value={symbol}>
                         {symbol}
                       </SelectItem>
