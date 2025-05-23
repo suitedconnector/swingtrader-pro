@@ -185,7 +185,7 @@ export function ChartSetupPhase() {
                 <div key={key} className="flex items-center space-x-3">
                   <Checkbox checked={criterion.value} disabled />
                   <div className="flex-1">
-                    <span className="text-sm">{criterion.description}</span>
+                    <span className="text-sm">{criterion.label}</span>
                     {criterion.weight > 1 && (
                       <span className="ml-2 px-1.5 py-0.5 text-xs bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded">
                         High Priority
