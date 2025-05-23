@@ -218,46 +218,28 @@ export function EntryPhase() {
             </div>
             <div>
               <Label htmlFor="symbol">Stock Symbol</Label>
-              <div className="flex space-x-2">
-                <Select 
-                  value={positionForm.symbol} 
-                  onValueChange={(value) => {
-                    setPositionForm(prev => ({ ...prev, symbol: value }));
-                    setPriceCalculations(null);
-                  }}
-                >
-                  <SelectTrigger className="flex-1">
-                    <SelectValue placeholder="Choose from watchlist" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {finalStocks.map((symbol) => (
-                      <SelectItem key={symbol} value={symbol}>
-                        {symbol}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button
-                  type="button"
-                  onClick={() => {
-                    console.log('Auto Calculate button clicked!');
-                    console.log('Current symbol:', positionForm.symbol);
-                    if (positionForm.symbol) {
-                      calculateOptimalPrices(positionForm.symbol);
-                    } else {
-                      console.log('No symbol selected');
-                    }
-                  }}
-                  disabled={!positionForm.symbol || isCalculatingPrices}
-                  className="px-4"
-                >
-                  {isCalculatingPrices ? (
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                  ) : (
-                    'Auto Calculate'
-                  )}
-                </Button>
-              </div>
+              <Select 
+                value={positionForm.symbol} 
+                onValueChange={(value) => {
+                  setPositionForm(prev => ({ ...prev, symbol: value }));
+                  setPriceCalculations(null);
+                  // Automatically calculate prices when stock is selected
+                  if (value) {
+                    calculateOptimalPrices(value);
+                  }
+                }}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Choose from watchlist" />
+                </SelectTrigger>
+                <SelectContent>
+                  {finalStocks.map((symbol) => (
+                    <SelectItem key={symbol} value={symbol}>
+                      {symbol}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {priceCalculations && (
