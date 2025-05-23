@@ -27,17 +27,27 @@ export function ChartSetupPhase() {
     setIsAnalyzing(true);
     try {
       const response = await fetch(`/api/technical-analysis/${symbol}`);
-      const data = await response.json();
+      const responseText = await response.text();
       
-      console.log('Analysis response:', data); // Debug log
+      console.log('Raw response:', responseText.slice(0, 500)); // Debug log
       console.log('Response status:', response.status);
       console.log('Response ok:', response.ok);
       
-      if (response.ok) {
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('JSON parse error:', parseError);
+        console.error('Response was:', responseText.slice(0, 200));
+        setAnalysisData(null);
+        return;
+      }
+      
+      if (response.ok && data) {
         console.log('Setting analysis data:', data);
         setAnalysisData(data);
       } else {
-        console.error('Analysis failed:', data.message || 'Invalid response');
+        console.error('Analysis failed:', data?.message || 'Invalid response');
         setAnalysisData(null);
       }
     } catch (error) {
