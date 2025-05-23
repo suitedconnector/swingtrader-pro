@@ -242,12 +242,12 @@ export async function registerRoutes(app: Express) {
 
       console.log(`Running technical analysis for ${symbol} with Polygon`);
       
-      // Get 6 months of daily data
+      // Get 6 months of daily data using the correct endpoint for your account
       const endDate = new Date().toISOString().split('T')[0];
       const startDate = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
       
       const response = await fetch(
-        `https://api.polygon.io/v2/aggs/ticker/${symbol.toUpperCase()}/range/1/day/${startDate}/${endDate}?adjusted=true&sort=asc&limit=200&apikey=${polygonApiKey}`
+        `https://api.polygon.io/v2/aggs/ticker/${symbol.toUpperCase()}/range/1/day/${startDate}/${endDate}?adjusted=true&sort=asc&limit=50&apikey=${polygonApiKey}`
       );
       
       const data = await response.json();
