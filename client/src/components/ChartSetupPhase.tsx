@@ -30,8 +30,11 @@ export function ChartSetupPhase() {
       const data = await response.json();
       
       console.log('Analysis response:', data); // Debug log
+      console.log('Response status:', response.status);
+      console.log('Response ok:', response.ok);
       
-      if (response.ok && data.symbol) {
+      if (response.ok) {
+        console.log('Setting analysis data:', data);
         setAnalysisData(data);
       } else {
         console.error('Analysis failed:', data.message || 'Invalid response');
@@ -96,6 +99,17 @@ export function ChartSetupPhase() {
       </div>
 
       {/* Debug Info */}
+      {selectedStock && (
+        <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-4 mb-6">
+          <div className="text-sm">
+            <div>Selected Stock: {selectedStock}</div>
+            <div>Is Analyzing: {isAnalyzing ? 'Yes' : 'No'}</div>
+            <div>Analysis Data: {analysisData ? 'Received' : 'None'}</div>
+            {analysisData && <div>Symbol in Data: {analysisData.symbol || 'Missing'}</div>}
+          </div>
+        </div>
+      )}
+
       {isAnalyzing && (
         <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 mb-6">
           <div className="flex items-center space-x-2">
