@@ -59,28 +59,28 @@ export function EntryPhase() {
   const fallbackStocks = ['ASST', 'VIGL', 'IONL'];
   const finalStocks = allStocks.length > 0 ? allStocks : fallbackStocks;
 
-  // Function to automatically calculate entry and stop loss prices
+  // Function to automatically calculate entry and stop loss prices using yfinance
   const calculateOptimalPrices = async (symbol: string) => {
     setIsCalculatingPrices(true);
     try {
-      // Get current market data using the existing Alpha Vantage endpoint
-      const response = await fetch(`/api/price-alert-suggestion/${symbol}`);
+      // Get current market data using yfinance (same as technical analysis)
+      const response = await fetch(`/api/yfinance-price/${symbol}`);
       const data = await response.json();
       
-      if (data.currentPrice && data.suggestedBreakout) {
+      if (data.currentPrice) {
         const currentPrice = parseFloat(data.currentPrice);
-        const suggestedEntry = parseFloat(data.suggestedBreakout);
+        const dayHigh = parseFloat(data.dayHigh) || currentPrice;
+        const dayLow = parseFloat(data.dayLow) || currentPrice;
         
-        // Calculate stop loss based on common swing trading rules
-        // Option 1: 8% below entry (conservative)
-        // Option 2: Below recent low (technical)
-        const conservativeStop = suggestedEntry * 0.92; // 8% stop loss
-        const technicalStop = Math.min(conservativeStop, currentPrice * 0.95); // 5% below current price
+        // Calculate entry price: breakout above day high or 2% above current price
+        const breakoutEntry = Math.max(dayHigh * 1.01, currentPrice * 1.02);
+        const suggestedEntry = breakoutEntry;
         
-        const suggestedStopLoss = Math.max(technicalStop, suggestedEntry * 0.85); // Max 15% stop
+        // Calculate stop loss: 8% below entry (conservative swing trading rule)
+        const suggestedStopLoss = suggestedEntry * 0.92;
         
-        let reasoning = `Entry: Breakout above $${currentPrice.toFixed(2)} (current price). `;
-        reasoning += `Stop: ${((suggestedEntry - suggestedStopLoss) / suggestedEntry * 100).toFixed(1)}% risk below entry.`;
+        let reasoning = `Entry: $${suggestedEntry.toFixed(2)} (breakout above $${currentPrice.toFixed(2)} current price). `;
+        reasoning += `Stop: $${suggestedStopLoss.toFixed(2)} (8% below entry for swing trading).`;
         
         setPriceCalculations({
           currentPrice,

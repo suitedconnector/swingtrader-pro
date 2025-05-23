@@ -343,6 +343,56 @@ else:
     }
   });
 
+  // YFinance price endpoint for automated entry/stop calculations
+  app.get('/api/yfinance-price/:symbol', async (req, res) => {
+    try {
+      const { symbol } = req.params;
+      console.log(`Getting yfinance price data for ${symbol}`);
+      
+      // Use Python to get current price data from yfinance
+      const priceData = await new Promise((resolve, reject) => {
+        exec(`python3 -c "
+import yfinance as yf
+import json
+ticker = yf.Ticker('${symbol.toUpperCase()}')
+hist = ticker.history(period='2d')
+if not hist.empty:
+    latest = hist.iloc[-1]
+    result = {
+        'currentPrice': float(latest['Close']),
+        'dayHigh': float(latest['High']),
+        'dayLow': float(latest['Low']),
+        'volume': int(latest['Volume'])
+    }
+    print(json.dumps(result))
+else:
+    print('{}')
+"`, (error, stdout, stderr) => {
+          if (error) {
+            reject(error);
+          } else {
+            try {
+              resolve(JSON.parse(stdout.trim() || '{}'));
+            } catch (e) {
+              resolve({});
+            }
+          }
+        });
+      });
+
+      if (priceData && (priceData as any).currentPrice) {
+        console.log(`YFinance price data retrieved for ${symbol}`);
+        res.json(priceData);
+      } else {
+        res.status(404).json({ message: 'Price data not found' });
+      }
+      
+    } catch (error: any) {
+      console.error('YFinance price error:', error);
+      res.status(500).json({ message: 'Failed to fetch price data' });
+    }
+  });
+
   function generateTechnicalScore(symbol: string): number {
     // Generate consistent but realistic scores based on symbol
     const hash = symbol.split('').reduce((a, b) => {
