@@ -29,10 +29,12 @@ export function ChartSetupPhase() {
       const response = await fetch(`/api/technical-analysis/${symbol}`);
       const data = await response.json();
       
-      if (response.ok) {
+      console.log('Analysis response:', data); // Debug log
+      
+      if (response.ok && data.symbol) {
         setAnalysisData(data);
       } else {
-        console.error('Analysis failed:', data.message);
+        console.error('Analysis failed:', data.message || 'Invalid response');
         setAnalysisData(null);
       }
     } catch (error) {
