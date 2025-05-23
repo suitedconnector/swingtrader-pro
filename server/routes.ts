@@ -234,7 +234,7 @@ export async function registerRoutes(app: Express) {
   app.get('/api/technical-analysis/:symbol', async (req, res) => {
     try {
       const { symbol } = req.params;
-      const polygonApiKey = "af928826-2797-4d4e-a228-b354da0e2803";
+      const polygonApiKey = "cgyVQw8eoMC4FoGyqb103QrsY7hh1SRu";
       
       if (!polygonApiKey) {
         return res.status(500).json({ message: 'Polygon API key not configured' });
