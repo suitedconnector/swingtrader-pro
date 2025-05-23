@@ -250,6 +250,99 @@ export async function registerRoutes(app: Express) {
     }
   });
 
+  // Data verification endpoint - compares yfinance vs Alpha Vantage
+  app.get('/api/verify-data/:symbol', async (req, res) => {
+    try {
+      const { symbol } = req.params;
+      console.log(`Verifying data accuracy for ${symbol}`);
+      
+      const apiKey = process.env.ALPHA_VANTAGE_API_KEY;
+      if (!apiKey) {
+        return res.status(500).json({ message: 'Alpha Vantage API key not configured' });
+      }
+
+      // Get Alpha Vantage data
+      const avResponse = await fetch(`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${symbol.toUpperCase()}&apikey=${apiKey}`);
+      const avData = await avResponse.json();
+      
+      // Get yfinance data
+      const yfinanceData = await new Promise((resolve, reject) => {
+        exec(`python3 -c "
+import yfinance as yf
+import json
+ticker = yf.Ticker('${symbol.upper()}')
+info = ticker.info
+hist = ticker.history(period='5d')
+if not hist.empty:
+    latest = hist.iloc[-1]
+    result = {
+        'price': float(latest['Close']),
+        'volume': int(latest['Volume']),
+        'high': float(latest['High']),
+        'low': float(latest['Low'])
+    }
+    print(json.dumps(result))
+else:
+    print('{}')
+"`, (error, stdout, stderr) => {
+          if (error) {
+            reject(error);
+          } else {
+            try {
+              resolve(JSON.parse(stdout.trim() || '{}'));
+            } catch (e) {
+              resolve({});
+            }
+          }
+        });
+      });
+
+      const comparison = {
+        symbol: symbol.toUpperCase(),
+        sources: {
+          alphaVantage: {},
+          yfinance: yfinanceData
+        },
+        accuracy: {
+          priceMatch: false,
+          volumeAvailable: false,
+          dataFreshness: 'unknown'
+        }
+      };
+
+      // Parse Alpha Vantage data
+      if (avData['Global Quote'] && avData['Global Quote']['05. price']) {
+        const avQuote = avData['Global Quote'];
+        comparison.sources.alphaVantage = {
+          price: parseFloat(avQuote['05. price']),
+          volume: parseFloat(avQuote['06. volume'] || '0'),
+          high: parseFloat(avQuote['03. high']),
+          low: parseFloat(avQuote['04. low']),
+          change: avQuote['09. change'],
+          changePercent: avQuote['10. change percent']
+        };
+
+        // Compare prices (allow for small differences due to timing)
+        if (yfinanceData.price && comparison.sources.alphaVantage.price) {
+          const priceDiff = Math.abs(yfinanceData.price - comparison.sources.alphaVantage.price);
+          const percentDiff = (priceDiff / comparison.sources.alphaVantage.price) * 100;
+          comparison.accuracy.priceMatch = percentDiff < 2; // Within 2%
+          comparison.accuracy.priceDifference = percentDiff.toFixed(2) + '%';
+        }
+
+        comparison.accuracy.volumeAvailable = !!(yfinanceData.volume && comparison.sources.alphaVantage.volume);
+        comparison.accuracy.dataFreshness = 'current';
+      }
+
+      console.log(`Data verification completed for ${symbol}`);
+      res.json(comparison);
+      
+    } catch (error: any) {
+      console.error('Data verification error:', error);
+      res.status(500).json({ message: 'Data verification failed' });
+    }
+  });
+
   function generateTechnicalScore(symbol: string): number {
     // Generate consistent but realistic scores based on symbol
     const hash = symbol.split('').reduce((a, b) => {
