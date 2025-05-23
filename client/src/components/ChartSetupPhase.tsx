@@ -129,6 +129,22 @@ export function ChartSetupPhase() {
         </div>
       )}
 
+      {/* Chart Section */}
+      <div className="mb-6 space-y-4">
+        {selectedStock && (
+          <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <TradingViewChart
+              symbol={selectedStock}
+              height={500}
+              theme={theme === 'dark' ? 'dark' : 'light'}
+              interval="D"
+              allow_symbol_change={false}
+              enable_publishing={false}
+            />
+          </div>
+        )}
+      </div>
+
       {/* Simple Analysis Display */}
       {analysisData && (
         <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4 mb-6">
@@ -211,35 +227,19 @@ export function ChartSetupPhase() {
         </div>
       )}
 
-      {/* Chart Section */}
-      <div className="mt-6 space-y-4">
-        {selectedStock && (
-          <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-            <TradingViewChart
-              symbol={selectedStock}
-              height={500}
-              theme={theme === 'dark' ? 'dark' : 'light'}
-              interval="D"
-              allow_symbol_change={false}
-              enable_publishing={false}
-            />
-          </div>
-        )}
+      {!selectedStock && allStocks.length === 0 && (
+        <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-8 text-center">
+          <i className="fas fa-chart-candlestick text-4xl text-gray-400 mb-4"></i>
+          <p className="text-gray-600 dark:text-gray-400">Add stocks to your watchlists from Phase 1 to analyze them here</p>
+        </div>
+      )}
 
-        {!selectedStock && allStocks.length === 0 && (
-          <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-8 text-center">
-            <i className="fas fa-chart-candlestick text-4xl text-gray-400 mb-4"></i>
-            <p className="text-gray-600 dark:text-gray-400">Add stocks to your watchlists from Phase 1 to analyze them here</p>
-          </div>
-        )}
-
-        {!selectedStock && allStocks.length > 0 && (
-          <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-8 text-center">
-            <i className="fas fa-chart-line text-4xl text-gray-400 mb-4"></i>
-            <p className="text-gray-600 dark:text-gray-400">Select a stock from the dropdown to view its chart and get automatic analysis</p>
-          </div>
-        )}
-      </div>
+      {!selectedStock && allStocks.length > 0 && (
+        <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-8 text-center">
+          <i className="fas fa-chart-line text-4xl text-gray-400 mb-4"></i>
+          <p className="text-gray-600 dark:text-gray-400">Select a stock from the dropdown to view its chart and get automatic analysis</p>
+        </div>
+      )}
     </div>
   );
 }
