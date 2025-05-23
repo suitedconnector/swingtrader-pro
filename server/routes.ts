@@ -234,7 +234,7 @@ export async function registerRoutes(app: Express) {
   app.get('/api/technical-analysis/:symbol', async (req, res) => {
     try {
       const { symbol } = req.params;
-      const polygonApiKey = process.env.POLYGON_API_KEY;
+      const polygonApiKey = process.env.POLYGON_SECRET_KEY || process.env.POLYGON_API_KEY;
       
       if (!polygonApiKey) {
         return res.status(500).json({ message: 'Polygon API key not configured' });
@@ -252,7 +252,15 @@ export async function registerRoutes(app: Express) {
       
       const data = await response.json();
       
+      console.log(`Polygon response for ${symbol}:`, data.status, data.resultsCount || 0, 'bars available');
+      
       if (data.status !== 'OK' || !data.results || data.results.length < 20) {
+        console.log('Insufficient data details:', {
+          status: data.status,
+          resultsCount: data.resultsCount,
+          resultsLength: data.results?.length || 0,
+          error: data.error
+        });
         return res.status(404).json({ 
           message: 'Unable to fetch sufficient data for analysis'
         });
