@@ -397,15 +397,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Market data endpoint (simulated)
-      const prices = dates.slice(0, 200).map(date => ({
-        date,
-        close: parseFloat(timeSeriesData[date]['4. close']),
-        high: parseFloat(timeSeriesData[date]['2. high']),
-        low: parseFloat(timeSeriesData[date]['3. low']),
-        volume: parseInt(timeSeriesData[date]['5. volume'])
-      }));
-
-      const currentPrice = prices[0].close;
+  app.get("/api/market-data", async (req, res) => {
+    try {
+      // In a real implementation, this would fetch from Alpha Vantage or similar
+      const marketData = {
+        spy: { price: "428.45", change: "+0.85%" },
+        nasdaq: { price: "15,234", change: "+1.24%" },
+        vix: { price: "18.45", change: "-2.15%" },
+        trend: "bullish"
+      };
+      res.json(marketData);
+    } catch (error) {
+      console.error('Market data error:', error);
+      res.status(500).json({ message: 'Failed to fetch market data' });
+    }
+  });
       
       // Calculate SMAs
       const sma10 = prices.slice(0, 10).reduce((sum, p) => sum + p.close, 0) / 10;
