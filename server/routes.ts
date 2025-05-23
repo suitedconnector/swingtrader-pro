@@ -282,6 +282,11 @@ export async function registerRoutes(app: Express) {
         support: (Math.random() * 50 + 100).toFixed(2),
         resistance: (Math.random() * 50 + 150).toFixed(2)
       },
+      currentPrice: (Math.random() * 100 + 50).toFixed(2),
+      marketData: {
+        priceChange30d: (Math.random() * 20 - 10).toFixed(1),
+        volume: Math.floor(Math.random() * 50000000 + 1000000)
+      },
       analysis: `${symbol} shows ${score > 60 ? 'positive' : 'mixed'} technical signals with ${score}% confidence score.`
     };
   }
