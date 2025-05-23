@@ -230,146 +230,54 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  // Technical analysis endpoint with Polygon.io
+  // Technical analysis endpoint using yfinance
   app.get('/api/technical-analysis/:symbol', async (req, res) => {
     try {
       const { symbol } = req.params;
-      const polygonApiKey = process.env.POLYGON_API_KEY;
       
-      if (!polygonApiKey) {
-        return res.status(500).json({ message: 'Polygon API key not configured' });
-      }
-
-      console.log(`Running technical analysis for ${symbol} with Polygon REST API`);
+      console.log(`Running technical analysis for ${symbol} with yfinance`);
       
-      // Try the REST API first with your account's API key
-      const endDate = new Date().toISOString().split('T')[0];
-      const startDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]; // 3 months
+      // Use Python script with yfinance for reliable data
+      const { spawn } = require('child_process');
+      const python = spawn('python3', ['./server/technical_analysis.py', symbol.toUpperCase()]);
       
-      const response = await fetch(
-        `https://api.polygon.io/v2/aggs/ticker/${symbol.toUpperCase()}/range/1/day/${startDate}/${endDate}?adjusted=true&sort=asc&apikey=${polygonApiKey}`
-      );
+      let output = '';
+      let errorOutput = '';
       
-      const data = await response.json();
-      
-      console.log(`Polygon API response for ${symbol}:`, {
-        status: data.status,
-        resultsCount: data.resultsCount || 0,
-        queryCount: data.queryCount || 0,
-        adjusted: data.adjusted,
-        nextUrl: !!data.next_url
+      python.stdout.on('data', (data: Buffer) => {
+        output += data.toString();
       });
       
-      if (data.status !== 'OK') {
-        console.log('API Error details:', data);
-        return res.status(400).json({ 
-          message: `Polygon API error: ${data.status || 'Unknown error'}`
-        });
-      }
-      
-      if (!data.results || data.results.length < 10) {
-        console.log('Insufficient data - results length:', data.results?.length || 0);
-        return res.status(404).json({ 
-          message: `Insufficient data for ${symbol}. Got ${data.results?.length || 0} data points, need at least 10.`
-        });
-      }
-
-      const bars = data.results;
-      const latest = bars[bars.length - 1];
-      
-      // Calculate moving averages
-      const calculateSMA = (periods: number) => {
-        if (bars.length < periods) return null;
-        const prices = bars.slice(-periods).map((bar: any) => bar.c);
-        return prices.reduce((sum: number, price: number) => sum + price, 0) / periods;
-      };
-      
-      const sma10 = calculateSMA(10);
-      const sma20 = calculateSMA(20);
-      const sma50 = calculateSMA(50);
-      const sma200 = bars.length >= 200 ? calculateSMA(200) : null;
-      
-      // Current metrics
-      const currentPrice = latest.c;
-      const currentVolume = latest.v;
-      
-      // Volume analysis (20-day average)
-      const recentVolumes = bars.slice(-20).map((bar: any) => bar.v);
-      const avgVolume = recentVolumes.reduce((sum: number, vol: number) => sum + vol, 0) / recentVolumes.length;
-      
-      // Price change over 30 days
-      const price30Days = bars.length >= 30 ? bars[bars.length - 30].c : currentPrice;
-      const priceChange30d = ((currentPrice - price30Days) / price30Days) * 100;
-      
-      // Build analysis criteria
-      const criteria = {
-        priceAbove10SMA: {
-          value: sma10 ? currentPrice > sma10 : false,
-          description: sma10 ? `Price $${currentPrice.toFixed(2)} > 10-SMA $${sma10.toFixed(2)}` : 'Need 10+ days data',
-          weight: 1
-        },
-        priceAbove20SMA: {
-          value: sma20 ? currentPrice > sma20 : false,
-          description: sma20 ? `Price $${currentPrice.toFixed(2)} > 20-SMA $${sma20.toFixed(2)}` : 'Need 20+ days data',
-          weight: 2
-        },
-        smaAlignment: {
-          value: sma10 && sma20 && sma50 ? (sma10 > sma20 && sma20 > sma50) : false,
-          description: 'Short-term moving averages in bullish alignment',
-          weight: 2
-        },
-        aboveLongTrend: {
-          value: sma200 ? currentPrice > sma200 : true,
-          description: sma200 ? `Price above 200-SMA ($${sma200.toFixed(2)})` : 'Long-term trend positive',
-          weight: 1
-        },
-        volumeStrength: {
-          value: currentVolume > avgVolume * 1.2,
-          description: `Volume ${(currentVolume/1000).toFixed(0)}K vs avg ${(avgVolume/1000).toFixed(0)}K`,
-          weight: 1
-        },
-        recentStrength: {
-          value: priceChange30d > 5,
-          description: `30-day performance: ${priceChange30d.toFixed(1)}%`,
-          weight: 1
-        }
-      };
-
-      // Calculate score
-      let score = 0;
-      let maxScore = 0;
-      
-      Object.values(criteria).forEach(criterion => {
-        maxScore += criterion.weight;
-        if (criterion.value) score += criterion.weight;
+      python.stderr.on('data', (data: Buffer) => {
+        errorOutput += data.toString();
       });
-
-      const scorePercentage = Math.round((score / maxScore) * 100);
-
-      const analysis = {
-        symbol: symbol.toUpperCase(),
-        currentPrice: currentPrice.toFixed(2),
-        technicalScore: score,
-        maxScore,
-        scorePercentage,
-        criteria,
-        marketData: {
-          sma10: sma10?.toFixed(2) || 'N/A',
-          sma20: sma20?.toFixed(2) || 'N/A',
-          sma50: sma50?.toFixed(2) || 'N/A',
-          sma200: sma200?.toFixed(2) || 'N/A',
-          volume: currentVolume,
-          avgVolume: Math.round(avgVolume),
-          priceChange30d: priceChange30d.toFixed(1)
+      
+      python.on('close', (code: number) => {
+        if (code !== 0) {
+          console.error(`Python script failed with code ${code}:`, errorOutput);
+          return res.status(500).json({ message: 'Technical analysis failed' });
         }
-      };
-
-      console.log(`Analysis complete: ${symbol} scored ${scorePercentage}%`);
-      res.json(analysis);
+        
+        try {
+          const result = JSON.parse(output);
+          
+          if (result.error) {
+            console.log(`Analysis error for ${symbol}:`, result.error);
+            return res.status(404).json({ message: result.error });
+          }
+          
+          console.log(`Technical analysis completed for ${symbol}: ${result.scorePercentage}% score`);
+          res.json(result);
+        } catch (parseError) {
+          console.error('Failed to parse Python output:', parseError);
+          console.error('Output was:', output);
+          res.status(500).json({ message: 'Failed to parse analysis results' });
+        }
+      });
       
     } catch (error) {
       console.error('Technical analysis error:', error);
-      res.status(500).json({ message: 'Failed to analyze stock data' });
+      res.status(500).json({ message: 'Failed to perform technical analysis' });
     }
   });
 
