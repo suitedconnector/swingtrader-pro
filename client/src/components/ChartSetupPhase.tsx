@@ -67,7 +67,9 @@ export function ChartSetupPhase() {
   };
 
   const getScoreColor = (percentage: number) => {
-    return 'text-gray-900 dark:text-white';
+    if (percentage >= 80) return 'text-green-600 dark:text-green-400';
+    if (percentage >= 60) return 'text-yellow-600 dark:text-yellow-400';
+    return 'text-red-600 dark:text-red-400';
   };
 
   const getScoreBackground = (percentage: number) => {
