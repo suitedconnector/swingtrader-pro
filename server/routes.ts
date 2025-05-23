@@ -1,6 +1,6 @@
 import { Express } from "express";
 import { createServer } from "http";
-import { exec } from "child_process";
+import { exec, spawn } from "child_process";
 import { storage } from "./storage";
 
 export async function registerRoutes(app: Express) {
@@ -236,14 +236,26 @@ export async function registerRoutes(app: Express) {
     const { symbol } = req.params;
     console.log(`Running technical analysis for ${symbol} with yfinance`);
     
-    exec(`/home/runner/workspace/.pythonlibs/bin/python3 ./server/technical_analysis.py ${symbol.toUpperCase()}`, (error: any, stdout: string, stderr: string) => {
-      if (error) {
-        console.error(`yfinance script error: ${error.message}`);
+    // Use spawn to run the Python script
+    const pythonProcess = spawn('/home/runner/workspace/.pythonlibs/bin/python3', 
+      ['./server/technical_analysis.py', symbol.toUpperCase()]);
+    
+    let stdout = '';
+    let stderr = '';
+    
+    pythonProcess.stdout.on('data', (data: Buffer) => {
+      stdout += data.toString();
+    });
+    
+    pythonProcess.stderr.on('data', (data: Buffer) => {
+      stderr += data.toString();
+    });
+    
+    pythonProcess.on('close', (code: number) => {
+      if (code !== 0) {
+        console.error(`Python script exited with code ${code}`);
+        console.error(`stderr: ${stderr}`);
         return res.status(500).json({ message: 'Technical analysis failed' });
-      }
-      
-      if (stderr) {
-        console.error(`yfinance stderr: ${stderr}`);
       }
       
       try {
@@ -261,6 +273,11 @@ export async function registerRoutes(app: Express) {
         console.error('Raw output:', stdout);
         res.status(500).json({ message: 'Failed to parse analysis results' });
       }
+    });
+    
+    pythonProcess.on('error', (error: Error) => {
+      console.error(`Python process error: ${error.message}`);
+      res.status(500).json({ message: 'Technical analysis failed' });
     });
   });
 
