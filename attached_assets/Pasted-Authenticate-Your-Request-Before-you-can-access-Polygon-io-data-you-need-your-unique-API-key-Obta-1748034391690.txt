@@ -1,0 +1,83 @@
+Authenticate Your Request
+Before you can access Polygon.io data, you need your unique API key.
+
+Obtaining Your API Key
+
+Sign up or log in to your account.
+Visit your Dashboard to find your API key.
+Keep your API key secure and do not share it publicly.
+You can include your API key in two ways:
+
+Query String Parameter (e.g., ?apiKey=YOUR_API_KEY):
+
+
+Query String Authentication
+
+
+https://api.polygon.io/v3/reference/dividends?apiKey=mP1MdHoHaIK3tIz0KrP0J9fez7E69oDv
+Authorization Header:
+
+
+Header Authentication
+
+
+GET /v3/reference/dividends HTTP/1.1
+Host: api.polygon.io
+Authorization: Bearer mP1MdHoHaIK3tIz0KrP0J9fez7E69oDv
+Note: Replace YOUR_API_KEY with your actual API key from your dashboard.
+
+Making Your First API Request
+At your terminal, let’s make a simple request using the curl command, to the Dividends endpoint to list recent dividends.
+
+
+cURL
+
+
+curl "https://api.polygon.io/v3/reference/dividends?apiKey=mP1MdHoHaIK3tIz0KrP0J9fez7E69oDv"
+This command retrieves dividend records. For more parameters and advanced filtering options, see the Dividends endpoint documentation.
+
+Pro Tip: If you omit your API key or use an invalid one, you will receive an authorization error. Ensure you have replaced YOUR_API_KEY with your actual key before running the command.
+
+Understanding the API Response
+All REST API endpoints from Polygon.io return data in a structured JSON format. You will commonly see fields like status, count, results, and request_id at the root level. The results field typically contains an array of objects, each representing an individual data record (such as a dividend, trade, or ticker detail).
+
+
+JSON Response
+
+
+{
+  "results": [
+      {
+          "cash_amount": 0.25,
+          "currency": "USD",
+          "declaration_date": "2024-10-31",
+          "dividend_type": "CD",
+          "ex_dividend_date": "2024-11-08",
+          "frequency": 4,
+          "id": "E416a068758f85277196150c3eb73a3331d04698856c141e883ad95710dd0b189",
+          "pay_date": "2024-11-14",
+          "record_date": "2024-11-11",
+          "ticker": "AAPL"
+      }
+  ],
+  "status": "OK",
+  "request_id": "5a8e1e551dc3a1c2c203744543b40399",
+}
+This pattern is consistent across our REST endpoints. Once you understand how to authenticate, make requests, and parse JSON responses for one endpoint -- like Dividends -- you can apply the same approach to all other endpoints. As you explore different datasets (e.g., trades, quotes, fundamentals), you will find that the process remains the same: use your API key, structure your request URL or headers appropriately, and parse the returned JSON to integrate the data into your applications.
+
+Now that you know how to authenticate and issue requests, you have the basic skills to use any of the Polygon.io REST endpoints.
+
+Explore Client Libraries
+While understanding the manual workflow is valuable, integrating directly with our client libraries is the recommended approach for production use. These libraries handle:
+
+Authentication and secure key management
+Request formatting and retry logic
+Parsing JSON responses into easy-to-use structures
+Available libraries:
+
+Python: GitHub - Python Client
+Go: GitHub - Go Client
+Kotlin: GitHub - JVM Client
+JavaScript: GitHub - JavaScript Client
+Next Steps
+With your first successful API request and an understanding of the common patterns in our JSON responses, you are prepared to explore any of Polygon.io’s endpoints. Check out our detailed documentation for additional parameters, data sources, and capabilities. As you progress, consider using our client libraries to greatly simplify the integration process and focus on building data-driven applications.
