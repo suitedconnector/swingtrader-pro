@@ -401,9 +401,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: 'Failed to fetch market data' });
     }
   });
-      
-      // Calculate SMAs
-      const sma10 = prices.slice(0, 10).reduce((sum, p) => sum + p.close, 0) / 10;
+
+  const server = createServer(app);
       const sma20 = prices.slice(0, 20).reduce((sum, p) => sum + p.close, 0) / 20;
       const sma50 = prices.slice(0, 50).reduce((sum, p) => sum + p.close, 0) / 50;
       const sma200 = prices.slice(0, 200).reduce((sum, p) => sum + p.close, 0) / 200;
