@@ -272,8 +272,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const dailyResponse = await fetch(`https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${symbol.toUpperCase()}&apikey=${apiKey}&outputsize=full`);
       const dailyData = await dailyResponse.json();
       
+      console.log(`Technical analysis for ${symbol}: Alpha Vantage response keys:`, Object.keys(dailyData));
+      
+      if (dailyData['Note']) {
+        console.log('Alpha Vantage rate limit hit:', dailyData['Note']);
+        return res.status(429).json({ message: 'API rate limit exceeded. Please try again in a moment.' });
+      }
+      
+      if (dailyData['Error Message']) {
+        console.log('Alpha Vantage error:', dailyData['Error Message']);
+        return res.status(404).json({ message: 'Stock symbol not found' });
+      }
+      
       if (!dailyData['Time Series (Daily)']) {
-        return res.status(404).json({ message: 'Stock data not found' });
+        console.log('No time series data found for', symbol, 'Available keys:', Object.keys(dailyData));
+        return res.status(404).json({ message: 'Stock data not found or invalid response from data provider' });
       }
 
       const timeSeriesData = dailyData['Time Series (Daily)'];
