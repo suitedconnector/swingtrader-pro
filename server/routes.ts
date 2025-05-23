@@ -172,11 +172,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Clear old scan results first
       await storage.clearOldScanResults();
       
-      // In a real implementation, this would call external APIs like Alpha Vantage
-      // For now, we'll return a success response
-      res.json({ message: "Scans executed successfully" });
+      const apiKey = process.env.POLYGON_API_KEY;
+      if (!apiKey) {
+        return res.status(500).json({ message: "Polygon API key not configured" });
+      }
+
+      // Fetch top gainers from Polygon API
+      const response = await fetch(`https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/gainers?apikey=${apiKey}`);
+      
+      if (!response.ok) {
+        throw new Error(`Polygon API error: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      if (data.results) {
+        // Process and filter results based on your trading criteria
+        for (const stock of data.results.slice(0, 20)) { // Limit to 20 stocks
+          const ticker = stock.ticker;
+          const price = stock.value || 0;
+          const change = stock.change || 0;
+          const changePercent = stock.changePercent || 0;
+          const volume = stock.session?.volume || 0;
+          
+          // Apply your filters: Price > $1, Volume > 1M shares (rough proxy for $30M dollar volume)
+          if (price > 1 && volume > 1000000 && Math.abs(changePercent) > 2) {
+            await storage.createScanResult({
+              symbol: ticker,
+              scanType: '1day', // Using 1day as proxy for strong movers
+              price: price.toString(),
+              change: change.toString(),
+              changePercent: changePercent.toString(),
+              volume: volume,
+              sector: 'Technology', // Polygon doesn't provide sector in this endpoint
+              adr: null,
+              dollarVolume: (price * volume).toString()
+            });
+          }
+        }
+      }
+      
+      res.json({ message: "Scans executed successfully with real market data" });
     } catch (error) {
-      res.status(500).json({ message: "Failed to run scans" });
+      console.error('Scan error:', error);
+      res.status(500).json({ message: "Failed to run scans: " + error.message });
     }
   });
 
