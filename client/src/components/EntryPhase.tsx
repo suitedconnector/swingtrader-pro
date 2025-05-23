@@ -239,7 +239,15 @@ export function EntryPhase() {
                 </Select>
                 <Button
                   type="button"
-                  onClick={() => positionForm.symbol && calculateOptimalPrices(positionForm.symbol)}
+                  onClick={() => {
+                    console.log('Auto Calculate button clicked!');
+                    console.log('Current symbol:', positionForm.symbol);
+                    if (positionForm.symbol) {
+                      calculateOptimalPrices(positionForm.symbol);
+                    } else {
+                      console.log('No symbol selected');
+                    }
+                  }}
                   disabled={!positionForm.symbol || isCalculatingPrices}
                   className="px-4"
                 >
