@@ -104,17 +104,7 @@ export function ChartSetupPhase() {
         )}
       </div>
 
-      {/* Debug Info */}
-      {selectedStock && (
-        <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-4 mb-6">
-          <div className="text-sm">
-            <div>Selected Stock: {selectedStock}</div>
-            <div>Is Analyzing: {isAnalyzing ? 'Yes' : 'No'}</div>
-            <div>Analysis Data: {analysisData ? 'Received' : 'None'}</div>
-            {analysisData && <div>Symbol in Data: {analysisData.symbol || 'Missing'}</div>}
-          </div>
-        </div>
-      )}
+
 
       {isAnalyzing && (
         <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 mb-6">
