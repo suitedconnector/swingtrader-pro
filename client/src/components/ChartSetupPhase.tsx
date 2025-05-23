@@ -145,14 +145,7 @@ export function ChartSetupPhase() {
         )}
       </div>
 
-      {/* Simple Analysis Display */}
-      {analysisData && (
-        <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4 mb-6">
-          <h4 className="font-medium text-gray-900 dark:text-white mb-2">Analysis Complete for {analysisData.symbol}</h4>
-          <p className="text-sm">Score: {analysisData.scorePercentage}% | Rating: {analysisData.overallRating}</p>
-          <p className="text-sm mt-2 text-gray-600 dark:text-gray-300">{analysisData.analysis}</p>
-        </div>
-      )}
+
 
       {/* Analysis Results */}
       {analysisData && (
