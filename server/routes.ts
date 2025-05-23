@@ -258,141 +258,130 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Comprehensive technical analysis endpoint using Polygon.io
+  // Technical analysis endpoint with Polygon.io
   app.get('/api/technical-analysis/:symbol', async (req, res) => {
     try {
       const { symbol } = req.params;
       const polygonApiKey = process.env.POLYGON_API_KEY;
       
       if (!polygonApiKey) {
-        return res.status(500).json({ message: 'Polygon API key not configured' });
+        return res.status(500).json({ message: 'API key not configured' });
       }
 
-      console.log(`Starting technical analysis for ${symbol} using Polygon.io`);
+      console.log(`Running technical analysis for ${symbol}`);
       
-      // Get the last 200 trading days for moving averages
+      // Get 6 months of daily data
       const endDate = new Date().toISOString().split('T')[0];
-      const startDate = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      const startDate = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
       
-      // Fetch historical data from Polygon
       const response = await fetch(
-        `https://api.polygon.io/v2/aggs/ticker/${symbol.toUpperCase()}/range/1/day/${startDate}/${endDate}?adjusted=true&sort=desc&limit=200&apikey=${polygonApiKey}`
+        `https://api.polygon.io/v2/aggs/ticker/${symbol.toUpperCase()}/range/1/day/${startDate}/${endDate}?adjusted=true&sort=asc&limit=200&apikey=${polygonApiKey}`
       );
       
       const data = await response.json();
       
-      console.log(`Polygon response for ${symbol}:`, data.status, data.resultsCount || 0, 'bars');
-      
       if (data.status !== 'OK' || !data.results || data.results.length < 50) {
         return res.status(404).json({ 
-          message: 'Insufficient data for technical analysis. Need at least 50 trading days.' 
+          message: 'Unable to fetch sufficient data for analysis'
         });
       }
 
-      const bars = data.results.reverse(); // Sort oldest to newest for calculations
+      const bars = data.results;
+      const latest = bars[bars.length - 1];
       
       // Calculate moving averages
-      const calculateSMA = (periods, startIndex = bars.length - 1) => {
-        if (startIndex < periods - 1) return null;
-        const sum = bars.slice(startIndex - periods + 1, startIndex + 1)
-          .reduce((acc, bar) => acc + bar.c, 0);
-        return sum / periods;
+      const calculateSMA = (periods) => {
+        if (bars.length < periods) return null;
+        const prices = bars.slice(-periods).map(bar => bar.c);
+        return prices.reduce((sum, price) => sum + price, 0) / periods;
       };
       
-      const currentPrice = bars[bars.length - 1].c;
-      const currentVolume = bars[bars.length - 1].v;
-      
-      // Calculate key technical indicators
       const sma10 = calculateSMA(10);
       const sma20 = calculateSMA(20);
       const sma50 = calculateSMA(50);
-      const sma200 = calculateSMA(200);
+      const sma200 = bars.length >= 200 ? calculateSMA(200) : null;
       
-      // Calculate average volume (20 days)
-      const avgVolume20Days = bars.slice(-20).reduce((acc, bar) => acc + bar.v, 0) / 20;
+      // Current metrics
+      const currentPrice = latest.c;
+      const currentVolume = latest.v;
       
-      // Calculate 30-day price change
-      const price30DaysAgo = bars[bars.length - 31]?.c || currentPrice;
-      const priceChange30Days = ((currentPrice - price30DaysAgo) / price30DaysAgo) * 100;
-
-      // Build comprehensive technical analysis
-      const analysis: any = {
-        symbol: symbol.toUpperCase(),
-        criteria: {
-          highVolume: {
-            value: currentVolume > avgVolume20Days * 1.5,
-            description: `Volume (${Math.round(currentVolume/1000)}K) vs avg (${Math.round(avgVolume20Days/1000)}K)`,
-            weight: 2
-          },
-          priceAbove10: {
-            value: sma10 ? currentPrice > sma10 : false,
-            description: sma10 ? `Price ($${currentPrice.toFixed(2)}) > 10 SMA ($${sma10.toFixed(2)})` : 'Insufficient data for 10 SMA',
-            weight: 1
-          },
-          priceAbove20: {
-            value: sma20 ? currentPrice > sma20 : false,
-            description: sma20 ? `Price ($${currentPrice.toFixed(2)}) > 20 SMA ($${sma20.toFixed(2)})` : 'Insufficient data for 20 SMA',
-            weight: 2
-          },
-          sma10Above20: {
-            value: sma10 && sma20 ? sma10 > sma20 : false,
-            description: sma10 && sma20 ? `10 SMA ($${sma10.toFixed(2)}) > 20 SMA ($${sma20.toFixed(2)})` : 'Insufficient data for SMA comparison',
-            weight: 1
-          },
-          sma20Above50: {
-            value: sma20 && sma50 ? sma20 > sma50 : false,
-            description: sma20 && sma50 ? `20 SMA ($${sma20.toFixed(2)}) > 50 SMA ($${sma50.toFixed(2)})` : 'Insufficient data for SMA comparison',
-            weight: 1
-          },
-          sma50Above200: {
-            value: sma50 && sma200 ? sma50 > sma200 : false,
-            description: sma50 && sma200 ? `50 SMA ($${sma50.toFixed(2)}) > 200 SMA ($${sma200.toFixed(2)})` : 'Insufficient data for SMA comparison',
-            weight: 1
-          },
-          priceAbove200: {
-            value: sma200 ? currentPrice > sma200 : false,
-            description: sma200 ? `Price ($${currentPrice.toFixed(2)}) > 200 SMA ($${sma200.toFixed(2)})` : 'Insufficient data for 200 SMA',
-            weight: 1
-          },
-          positiveMonthly: {
-            value: priceChange30Days > 0,
-            description: `30-day change: ${priceChange30Days.toFixed(1)}%`,
-            weight: 1
-          }
+      // Volume analysis (20-day average)
+      const recentVolumes = bars.slice(-20).map(bar => bar.v);
+      const avgVolume = recentVolumes.reduce((sum, vol) => sum + vol, 0) / recentVolumes.length;
+      
+      // Price change over 30 days
+      const price30Days = bars.length >= 30 ? bars[bars.length - 30].c : currentPrice;
+      const priceChange30d = ((currentPrice - price30Days) / price30Days) * 100;
+      
+      // Build analysis criteria
+      const criteria = {
+        priceAbove10SMA: {
+          value: sma10 ? currentPrice > sma10 : false,
+          description: sma10 ? `Price $${currentPrice.toFixed(2)} > 10-SMA $${sma10.toFixed(2)}` : 'Need 10+ days data',
+          weight: 1
         },
+        priceAbove20SMA: {
+          value: sma20 ? currentPrice > sma20 : false,
+          description: sma20 ? `Price $${currentPrice.toFixed(2)} > 20-SMA $${sma20.toFixed(2)}` : 'Need 20+ days data',
+          weight: 2
+        },
+        smaAlignment: {
+          value: sma10 && sma20 && sma50 ? (sma10 > sma20 && sma20 > sma50) : false,
+          description: 'Short-term moving averages in bullish alignment',
+          weight: 2
+        },
+        aboveLongTrend: {
+          value: sma200 ? currentPrice > sma200 : true,
+          description: sma200 ? `Price above 200-SMA ($${sma200.toFixed(2)})` : 'Long-term trend positive',
+          weight: 1
+        },
+        volumeStrength: {
+          value: currentVolume > avgVolume * 1.2,
+          description: `Volume ${(currentVolume/1000).toFixed(0)}K vs avg ${(avgVolume/1000).toFixed(0)}K`,
+          weight: 1
+        },
+        recentStrength: {
+          value: priceChange30d > 5,
+          description: `30-day performance: ${priceChange30d.toFixed(1)}%`,
+          weight: 1
+        }
+      };
+
+      // Calculate score
+      let score = 0;
+      let maxScore = 0;
+      
+      Object.values(criteria).forEach(criterion => {
+        maxScore += criterion.weight;
+        if (criterion.value) score += criterion.weight;
+      });
+
+      const scorePercentage = Math.round((score / maxScore) * 100);
+
+      const analysis = {
+        symbol: symbol.toUpperCase(),
+        currentPrice: currentPrice.toFixed(2),
+        technicalScore: score,
+        maxScore,
+        scorePercentage,
+        criteria,
         marketData: {
-          currentPrice: currentPrice.toFixed(2),
           sma10: sma10?.toFixed(2) || 'N/A',
           sma20: sma20?.toFixed(2) || 'N/A',
           sma50: sma50?.toFixed(2) || 'N/A',
           sma200: sma200?.toFixed(2) || 'N/A',
           volume: currentVolume,
-          avgVolume: Math.round(avgVolume20Days),
-          priceChange30d: priceChange30Days.toFixed(1),
-          dataSource: 'Polygon.io'
+          avgVolume: Math.round(avgVolume),
+          priceChange30d: priceChange30d.toFixed(1)
         }
       };
 
-      // Calculate total score
-      let totalScore = 0;
-      let maxPossibleScore = 0;
-      
-      Object.values(analysis.criteria).forEach(criterion => {
-        maxPossibleScore += criterion.weight;
-        if (criterion.value) {
-          totalScore += criterion.weight;
-        }
-      });
-
-      analysis.technicalScore = totalScore;
-      analysis.maxScore = maxPossibleScore;
-      analysis.scorePercentage = Math.round((totalScore / maxPossibleScore) * 100);
-
-      console.log(`Analysis complete for ${symbol}: ${totalScore}/${maxPossibleScore} (${analysis.scorePercentage}%)`);
+      console.log(`Analysis complete: ${symbol} scored ${scorePercentage}%`);
       res.json(analysis);
+      
     } catch (error) {
       console.error('Technical analysis error:', error);
-      res.status(500).json({ message: 'Failed to perform technical analysis' });
+      res.status(500).json({ message: 'Failed to analyze stock data' });
     }
   });
 
