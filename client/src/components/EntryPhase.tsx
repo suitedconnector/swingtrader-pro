@@ -53,8 +53,8 @@ export function EntryPhase() {
   const calculateOptimalPrices = async (symbol: string) => {
     setIsCalculatingPrices(true);
     try {
-      // Get current market data and suggested breakout price
-      const response = await fetch(`/api/stock-price/${symbol}`);
+      // Get current market data using the existing Alpha Vantage endpoint
+      const response = await fetch(`/api/price-alert-suggestion/${symbol}`);
       const data = await response.json();
       
       if (data.currentPrice && data.suggestedBreakout) {
