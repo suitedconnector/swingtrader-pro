@@ -73,9 +73,7 @@ export function ChartSetupPhase() {
   };
 
   const getScoreBackground = (percentage: number) => {
-    if (percentage >= 80) return 'bg-green-100 dark:bg-green-900/20';
-    if (percentage >= 60) return 'bg-yellow-100 dark:bg-yellow-900/20';
-    return 'bg-red-100 dark:bg-red-900/20';
+    return 'bg-gray-50 dark:bg-gray-800';
   };
 
   return (
