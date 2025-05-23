@@ -236,8 +236,6 @@ export async function registerRoutes(app: Express) {
       const { symbol } = req.params;
       
       console.log(`Running technical analysis for ${symbol} with Alpha Vantage`);
-      
-      try {
         const alphaVantageKey = process.env.ALPHA_VANTAGE_API_KEY;
         if (!alphaVantageKey) {
           return res.status(500).json({ message: 'API key not configured' });
@@ -332,11 +330,6 @@ export async function registerRoutes(app: Express) {
         console.log(`Technical analysis completed for ${symbol}: ${scorePercentage}% score`);
         res.json(result);
         
-      } catch (error) {
-        console.error('Alpha Vantage analysis error:', error);
-        res.status(500).json({ message: 'Failed to analyze stock' });
-      }
-      
     } catch (error) {
       console.error('Technical analysis error:', error);
       res.status(500).json({ message: 'Failed to perform technical analysis' });
