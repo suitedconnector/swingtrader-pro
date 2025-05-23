@@ -2,11 +2,13 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { apiRequest } from '@/lib/queryClient';
 import type { ScanResult, Watchlist } from '@shared/schema';
 
 export function ScanningPhase() {
   const queryClient = useQueryClient();
+  const [selectedSector, setSelectedSector] = useState<string>('all');
   const [scanChecklist, setScanChecklist] = useState({
     oneMonth: false,
     threeMonth: false,
@@ -17,6 +19,22 @@ export function ScanningPhase() {
     price1Dollar: false,
     volume30Million: false,
   });
+
+  // Top trading sectors (excluding biotech)
+  const tradingSectors = [
+    { value: 'all', label: 'All Sectors' },
+    { value: 'Technology', label: 'Technology' },
+    { value: 'Financial Services', label: 'Financial Services' },
+    { value: 'Healthcare', label: 'Healthcare (Non-Biotech)' },
+    { value: 'Consumer Discretionary', label: 'Consumer Discretionary' },
+    { value: 'Energy', label: 'Energy' },
+    { value: 'Industrials', label: 'Industrials' },
+    { value: 'Materials', label: 'Materials' },
+    { value: 'Real Estate', label: 'Real Estate' },
+    { value: 'Communication Services', label: 'Communication Services' },
+    { value: 'Utilities', label: 'Utilities' },
+    { value: 'Consumer Staples', label: 'Consumer Staples' },
+  ];
 
   const { data: scanResults = [], isLoading: scanLoading } = useQuery<ScanResult[]>({
     queryKey: ['/api/scan-results'],
@@ -64,6 +82,13 @@ export function ScanningPhase() {
   };
 
   const isBiotechStock = (sector: string) => sector.toLowerCase().includes('biotechnology');
+
+  // Filter scan results by selected sector
+  const filteredScanResults = scanResults.filter(result => {
+    if (selectedSector === 'all') return true;
+    if (selectedSector === 'Healthcare' && isBiotechStock(result.sector)) return false;
+    return result.sector.toLowerCase().includes(selectedSector.toLowerCase());
+  });
 
   return (
     <div className="bg-white dark:bg-dark-surface rounded-xl shadow-sm border border-gray-200 dark:border-dark-border p-6">
@@ -151,16 +176,38 @@ export function ScanningPhase() {
         </div>
 
         <div className="mt-6">
-          <h4 className="font-medium text-gray-900 dark:text-white mb-3">Scan Results</h4>
+          <div className="flex items-center justify-between mb-4">
+            <h4 className="font-medium text-gray-900 dark:text-white">Scan Results</h4>
+            <div className="flex items-center space-x-2">
+              <span className="text-sm text-gray-600 dark:text-gray-400">Filter by Sector:</span>
+              <Select value={selectedSector} onValueChange={setSelectedSector}>
+                <SelectTrigger className="w-48">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {tradingSectors.map((sector) => (
+                    <SelectItem key={sector.value} value={sector.value}>
+                      {sector.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
           {scanLoading ? (
             <div className="text-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-trading-primary mx-auto"></div>
               <p className="text-gray-600 dark:text-gray-400 mt-2">Loading scan results...</p>
             </div>
-          ) : scanResults.length === 0 ? (
+          ) : filteredScanResults.length === 0 ? (
             <div className="text-center py-8">
               <i className="fas fa-search text-4xl text-gray-400 mb-4"></i>
-              <p className="text-gray-600 dark:text-gray-400">No scan results yet. Run scans to see potential trading candidates.</p>
+              <p className="text-gray-600 dark:text-gray-400">
+                {scanResults.length === 0 
+                  ? "No scan results yet. Run scans to see potential trading candidates."
+                  : `No stocks found in ${selectedSector === 'all' ? 'selected' : selectedSector} sector.`
+                }
+              </p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -176,7 +223,7 @@ export function ScanningPhase() {
                   </tr>
                 </thead>
                 <tbody className="bg-white dark:bg-dark-surface divide-y divide-gray-200 dark:divide-gray-700">
-                  {scanResults.map((result) => (
+                  {filteredScanResults.map((result) => (
                     <tr key={result.id} className={isBiotechStock(result.sector) ? 'bg-red-50 dark:bg-red-900/20' : ''}>
                       <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">{result.symbol}</td>
                       <td className="px-4 py-3 text-sm font-mono text-gray-900 dark:text-white">${result.price}</td>
