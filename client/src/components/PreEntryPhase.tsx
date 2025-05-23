@@ -13,6 +13,7 @@ export function PreEntryPhase() {
     targetPrice: '',
     alertType: 'breakout' as 'breakout' | 'breakdown',
   });
+  const [isLoadingPrice, setIsLoadingPrice] = useState(false);
 
   const { data: priceAlerts = [] } = useQuery<PriceAlert[]>({
     queryKey: ['/api/price-alerts'],
@@ -62,6 +63,42 @@ export function PreEntryPhase() {
     const watchlist = watchlists.find(w => w.type === watchlistType);
     if (watchlist) {
       removeFromWatchlistMutation.mutate({ watchlistId: watchlist.id, symbol });
+    }
+  };
+
+  const fetchPriceAndSetBreakout = async (symbol: string) => {
+    if (!symbol || symbol.length < 1) return;
+    
+    setIsLoadingPrice(true);
+    try {
+      const response = await fetch(`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${symbol.toUpperCase()}&apikey=${import.meta.env.VITE_ALPHA_VANTAGE_API_KEY || process.env.ALPHA_VANTAGE_API_KEY}`);
+      const data = await response.json();
+      
+      if (data['Global Quote'] && data['Global Quote']['05. price']) {
+        const currentPrice = parseFloat(data['Global Quote']['05. price']);
+        const high52Week = parseFloat(data['Global Quote']['03. high']) || currentPrice;
+        
+        // Suggest breakout level: 2-5% above current price or near 52-week high
+        const breakoutSuggestion = Math.min(currentPrice * 1.03, high52Week * 0.98);
+        
+        setAlertForm(prev => ({
+          ...prev,
+          targetPrice: breakoutSuggestion.toFixed(2)
+        }));
+      }
+    } catch (error) {
+      console.error('Error fetching price:', error);
+    } finally {
+      setIsLoadingPrice(false);
+    }
+  };
+
+  const handleSymbolChange = (value: string) => {
+    setAlertForm(prev => ({ ...prev, symbol: value }));
+    
+    // Auto-fetch price when symbol is 3+ characters
+    if (value.length >= 3) {
+      fetchPriceAndSetBreakout(value);
     }
   };
 
@@ -134,13 +171,20 @@ export function PreEntryPhase() {
           <form onSubmit={handleCreateAlert} className="space-y-3">
             <div>
               <Label htmlFor="symbol">Stock Symbol</Label>
-              <Input
-                id="symbol"
-                value={alertForm.symbol}
-                onChange={(e) => setAlertForm(prev => ({ ...prev, symbol: e.target.value }))}
-                placeholder="e.g., NVDA"
-                className="uppercase"
-              />
+              <div className="relative">
+                <Input
+                  id="symbol"
+                  value={alertForm.symbol}
+                  onChange={(e) => handleSymbolChange(e.target.value)}
+                  placeholder="e.g., NVDA"
+                  className="uppercase"
+                />
+                {isLoadingPrice && (
+                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-trading-primary"></div>
+                  </div>
+                )}
+              </div>
             </div>
             <div>
               <Label htmlFor="targetPrice">Target Price ($)</Label>
