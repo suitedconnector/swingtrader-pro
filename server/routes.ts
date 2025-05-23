@@ -172,31 +172,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Clear old scan results first
       await storage.clearOldScanResults();
       
-      const apiKey = process.env.POLYGON_API_KEY;
+      const apiKey = process.env.ALPHA_VANTAGE_API_KEY;
       if (!apiKey) {
-        return res.status(500).json({ message: "Polygon API key not configured" });
+        return res.status(500).json({ message: "Alpha Vantage API key not configured" });
       }
 
-      // Fetch top gainers from Polygon API
-      const response = await fetch(`https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/gainers?apikey=${apiKey}`);
+      // Fetch top gainers from Alpha Vantage API
+      const response = await fetch(`https://www.alphavantage.co/query?function=TOP_GAINERS_LOSERS&apikey=${apiKey}`);
       
       if (!response.ok) {
-        throw new Error(`Polygon API error: ${response.status}`);
+        throw new Error(`Alpha Vantage API error: ${response.status}`);
       }
       
       const data = await response.json();
       
-      if (data.results) {
+      if (data.top_gainers) {
         // Process and filter results based on your trading criteria
-        for (const stock of data.results.slice(0, 20)) { // Limit to 20 stocks
+        for (const stock of data.top_gainers.slice(0, 20)) { // Limit to 20 stocks
           const ticker = stock.ticker;
-          const price = stock.value || 0;
-          const change = stock.change || 0;
-          const changePercent = stock.changePercent || 0;
-          const volume = stock.session?.volume || 0;
+          const price = parseFloat(stock.price) || 0;
+          const change = parseFloat(stock.change_amount) || 0;
+          const changePercent = parseFloat(stock.change_percentage.replace('%', '')) || 0;
+          const volume = parseInt(stock.volume) || 0;
           
           // Apply your filters: Price > $1, Volume > 1M shares (rough proxy for $30M dollar volume)
-          if (price > 1 && volume > 1000000 && Math.abs(changePercent) > 2) {
+          if (price > 1 && volume > 1000000 && changePercent > 2) {
             await storage.createScanResult({
               symbol: ticker,
               scanType: '1day', // Using 1day as proxy for strong movers
@@ -204,7 +204,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               change: change.toString(),
               changePercent: changePercent.toString(),
               volume: volume,
-              sector: 'Technology', // Polygon doesn't provide sector in this endpoint
+              sector: 'Technology', // Alpha Vantage doesn't provide sector in this endpoint
               adr: null,
               dollarVolume: (price * volume).toString()
             });
@@ -212,7 +212,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
-      res.json({ message: "Scans executed successfully with real market data" });
+      res.json({ message: "Scans executed successfully with Alpha Vantage data" });
     } catch (error) {
       console.error('Scan error:', error);
       res.status(500).json({ message: "Failed to run scans: " + error.message });
