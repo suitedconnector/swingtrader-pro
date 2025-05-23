@@ -235,100 +235,38 @@ export async function registerRoutes(app: Express) {
     try {
       const { symbol } = req.params;
       
-      console.log(`Running technical analysis for ${symbol} with Alpha Vantage`);
-        const alphaVantageKey = process.env.ALPHA_VANTAGE_API_KEY;
-        if (!alphaVantageKey) {
-          return res.status(500).json({ message: 'API key not configured' });
+      console.log(`Running technical analysis for ${symbol} with yfinance`);
+      
+      // Use Python script with yfinance for reliable data
+      const { exec } = require('child_process');
+      const pythonCommand = `cd server && python3 technical_analysis.py ${symbol.toUpperCase()}`;
+      
+      exec(pythonCommand, (error: any, stdout: string, stderr: string) => {
+        if (error) {
+          console.error(`Python script error: ${error}`);
+          return res.status(500).json({ message: 'Technical analysis failed' });
         }
-
-        // Get current price and basic data
-        const quoteResponse = await fetch(
-          `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${alphaVantageKey}`
-        );
-        const quoteData = await quoteResponse.json();
-        const quote = quoteData['Global Quote'];
         
-        if (!quote || !quote['05. price']) {
-          return res.status(404).json({ message: 'Unable to fetch stock data' });
+        if (stderr) {
+          console.error(`Python stderr: ${stderr}`);
         }
-
-        const currentPrice = parseFloat(quote['05. price']);
-        const changePercent = parseFloat(quote['10. change percent'].replace('%', ''));
         
-        // Simple scoring system based on available data
-        let score = 0;
-        let maxScore = 8;
-        const criteria: any = {};
-
-        // Price momentum (positive change)
-        criteria.positive_change = {
-          value: changePercent > 0,
-          description: `Daily change: ${changePercent.toFixed(2)}%`,
-          weight: 2
-        };
-        if (changePercent > 0) score += 2;
-
-        // Strong positive momentum
-        criteria.strong_momentum = {
-          value: changePercent > 2,
-          description: `Strong momentum (>2%)`,
-          weight: 2
-        };
-        if (changePercent > 2) score += 2;
-
-        // Price above $5 (good liquidity)
-        criteria.price_level = {
-          value: currentPrice > 5,
-          description: `Price above $5 ($${currentPrice.toFixed(2)})`,
-          weight: 1
-        };
-        if (currentPrice > 5) score += 1;
-
-        // High volume indicator (using change % as proxy)
-        const volumeStrong = Math.abs(changePercent) > 1;
-        criteria.volume_indication = {
-          value: volumeStrong,
-          description: `Volume activity indicated by price movement`,
-          weight: 1
-        };
-        if (volumeStrong) score += 1;
-
-        // Recent strength (positive change > 1%)
-        criteria.recent_strength = {
-          value: changePercent > 1,
-          description: `Recent strength (>1% daily gain)`,
-          weight: 1
-        };
-        if (changePercent > 1) score += 1;
-
-        // Market cap consideration (price > $10)
-        criteria.market_presence = {
-          value: currentPrice > 10,
-          description: `Established market presence (>$10)`,
-          weight: 1
-        };
-        if (currentPrice > 10) score += 1;
-
-        const scorePercentage = Math.round((score / maxScore) * 100);
-
-        const result = {
-          symbol: symbol.toUpperCase(),
-          currentPrice: parseFloat(currentPrice.toFixed(2)),
-          technicalScore: score,
-          maxScore: maxScore,
-          scorePercentage: scorePercentage,
-          criteria: criteria,
-          marketData: {
-            dailyChange: changePercent,
-            previousClose: parseFloat(quote['08. previous close']),
-            volume: quote['06. volume'],
-            high: parseFloat(quote['03. high']),
-            low: parseFloat(quote['04. low'])
+        try {
+          const result = JSON.parse(stdout);
+          
+          if (result.error) {
+            console.log(`Analysis error for ${symbol}:`, result.error);
+            return res.status(404).json({ message: result.error });
           }
-        };
-
-        console.log(`Technical analysis completed for ${symbol}: ${scorePercentage}% score`);
-        res.json(result);
+          
+          console.log(`Technical analysis completed for ${symbol}: ${result.scorePercentage}% score`);
+          res.json(result);
+        } catch (parseError) {
+          console.error('Failed to parse Python output:', parseError);
+          console.error('Output was:', stdout);
+          res.status(500).json({ message: 'Failed to parse analysis results' });
+        }
+      });
         
     } catch (error) {
       console.error('Technical analysis error:', error);
