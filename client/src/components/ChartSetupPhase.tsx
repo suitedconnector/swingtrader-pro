@@ -1,7 +1,14 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import TradingViewChart from './TradingViewChart';
+import { useTheme } from '@/hooks/useTheme';
+import type { Watchlist } from '@shared/schema';
 
 export function ChartSetupPhase() {
+  const { theme } = useTheme();
+  const [selectedStock, setSelectedStock] = useState<string>('');
   const [technicalChecklist, setTechnicalChecklist] = useState({
     initialMove: false,
     pullback: false,
@@ -17,6 +24,15 @@ export function ChartSetupPhase() {
     priceAbove200: false,
     marketTrending: false,
   });
+
+  const { data: watchlists = [] } = useQuery<Watchlist[]>({
+    queryKey: ['/api/watchlists'],
+  });
+
+  // Get all unique symbols from both Focus and Flagged lists
+  const allStocks = watchlists.reduce((stocks: string[], watchlist) => {
+    return [...stocks, ...watchlist.symbols];
+  }, []);
 
   const handleTechnicalChange = (key: keyof typeof technicalChecklist) => {
     setTechnicalChecklist(prev => ({ ...prev, [key]: !prev[key] }));
@@ -117,10 +133,49 @@ export function ChartSetupPhase() {
         </div>
       </div>
 
-      <div className="mt-6 bg-gray-100 dark:bg-gray-800 rounded-lg p-8 text-center">
-        <i className="fas fa-chart-candlestick text-4xl text-gray-400 mb-4"></i>
-        <p className="text-gray-600 dark:text-gray-400">Chart visualization would integrate here</p>
-        <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">TradingView widget or similar charting solution</p>
+      <div className="mt-6 space-y-4">
+        <div className="flex items-center space-x-4">
+          <h4 className="font-medium text-gray-900 dark:text-white">Select Stock to Analyze:</h4>
+          <Select value={selectedStock} onValueChange={setSelectedStock}>
+            <SelectTrigger className="w-48">
+              <SelectValue placeholder="Choose a stock" />
+            </SelectTrigger>
+            <SelectContent>
+              {allStocks.map((symbol) => (
+                <SelectItem key={symbol} value={symbol}>
+                  {symbol}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {selectedStock && (
+          <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <TradingViewChart
+              symbol={selectedStock}
+              height={500}
+              theme={theme === 'dark' ? 'dark' : 'light'}
+              interval="D"
+              allow_symbol_change={false}
+              enable_publishing={false}
+            />
+          </div>
+        )}
+
+        {!selectedStock && allStocks.length === 0 && (
+          <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-8 text-center">
+            <i className="fas fa-chart-candlestick text-4xl text-gray-400 mb-4"></i>
+            <p className="text-gray-600 dark:text-gray-400">Add stocks to your watchlists from Phase 1 to analyze them here</p>
+          </div>
+        )}
+
+        {!selectedStock && allStocks.length > 0 && (
+          <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-8 text-center">
+            <i className="fas fa-chart-line text-4xl text-gray-400 mb-4"></i>
+            <p className="text-gray-600 dark:text-gray-400">Select a stock from the dropdown to view its chart</p>
+          </div>
+        )}
       </div>
     </div>
   );
