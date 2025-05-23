@@ -240,29 +240,37 @@ export async function registerRoutes(app: Express) {
         return res.status(500).json({ message: 'Polygon API key not configured' });
       }
 
-      console.log(`Running technical analysis for ${symbol} with Polygon`);
+      console.log(`Running technical analysis for ${symbol} with Polygon REST API`);
       
-      // Get 6 months of daily data using the correct endpoint for your account
+      // Try the REST API first with your account's API key
       const endDate = new Date().toISOString().split('T')[0];
-      const startDate = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      const startDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]; // 3 months
       
       const response = await fetch(
-        `https://api.polygon.io/v2/aggs/ticker/${symbol.toUpperCase()}/range/1/day/${startDate}/${endDate}?adjusted=true&sort=asc&limit=50&apikey=${polygonApiKey}`
+        `https://api.polygon.io/v2/aggs/ticker/${symbol.toUpperCase()}/range/1/day/${startDate}/${endDate}?adjusted=true&sort=asc&apikey=${polygonApiKey}`
       );
       
       const data = await response.json();
       
-      console.log(`Polygon response for ${symbol}:`, data.status, data.resultsCount || 0, 'bars available');
+      console.log(`Polygon API response for ${symbol}:`, {
+        status: data.status,
+        resultsCount: data.resultsCount || 0,
+        queryCount: data.queryCount || 0,
+        adjusted: data.adjusted,
+        nextUrl: !!data.next_url
+      });
       
-      if (data.status !== 'OK' || !data.results || data.results.length < 20) {
-        console.log('Insufficient data details:', {
-          status: data.status,
-          resultsCount: data.resultsCount,
-          resultsLength: data.results?.length || 0,
-          error: data.error
+      if (data.status !== 'OK') {
+        console.log('API Error details:', data);
+        return res.status(400).json({ 
+          message: `Polygon API error: ${data.status || 'Unknown error'}`
         });
+      }
+      
+      if (!data.results || data.results.length < 10) {
+        console.log('Insufficient data - results length:', data.results?.length || 0);
         return res.status(404).json({ 
-          message: 'Unable to fetch sufficient data for analysis'
+          message: `Insufficient data for ${symbol}. Got ${data.results?.length || 0} data points, need at least 10.`
         });
       }
 
