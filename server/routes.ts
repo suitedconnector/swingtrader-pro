@@ -258,61 +258,145 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Comprehensive technical analysis endpoint
+  // Comprehensive technical analysis endpoint using Polygon.io
   app.get('/api/technical-analysis/:symbol', async (req, res) => {
     try {
       const { symbol } = req.params;
+      const polygonApiKey = process.env.POLYGON_API_KEY;
       
-      console.log(`Starting technical analysis for ${symbol}`);
-      
-      // For now, let's create a working analysis using the current stock price
-      // This will give you immediate chart scoring while we resolve API limits
-      
-      // Get current stock price from our simpler endpoint
-      const apiKey = process.env.ALPHA_VANTAGE_API_KEY;
-      if (!apiKey) {
-        return res.status(500).json({ message: 'API key not configured' });
+      if (!polygonApiKey) {
+        return res.status(500).json({ message: 'Polygon API key not configured' });
       }
 
-      console.log(`Fetching current price for ${symbol}`);
-      const quoteResponse = await fetch(`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${symbol.toUpperCase()}&apikey=${apiKey}`);
-      const quoteData = await quoteResponse.json();
+      console.log(`Starting technical analysis for ${symbol} using Polygon.io`);
       
-      console.log(`Quote response for ${symbol}:`, Object.keys(quoteData));
+      // Get the last 200 trading days for moving averages
+      const endDate = new Date().toISOString().split('T')[0];
+      const startDate = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
       
-      if (quoteData['Note']) {
-        console.log('Rate limit hit, using fallback analysis');
-        // Create a basic analysis when API limits are hit
-        const analysis = {
-          symbol: symbol.toUpperCase(),
-          criteria: {
-            highVolume: { value: true, description: "Volume above average (estimated)", weight: 1 },
-            priceAbove20: { value: true, description: "Price above 20-day average (estimated)", weight: 1 },
-            bullishTrend: { value: true, description: "Short-term trend positive (estimated)", weight: 1 }
+      // Fetch historical data from Polygon
+      const response = await fetch(
+        `https://api.polygon.io/v2/aggs/ticker/${symbol.toUpperCase()}/range/1/day/${startDate}/${endDate}?adjusted=true&sort=desc&limit=200&apikey=${polygonApiKey}`
+      );
+      
+      const data = await response.json();
+      
+      console.log(`Polygon response for ${symbol}:`, data.status, data.resultsCount || 0, 'bars');
+      
+      if (data.status !== 'OK' || !data.results || data.results.length < 50) {
+        return res.status(404).json({ 
+          message: 'Insufficient data for technical analysis. Need at least 50 trading days.' 
+        });
+      }
+
+      const bars = data.results.reverse(); // Sort oldest to newest for calculations
+      
+      // Calculate moving averages
+      const calculateSMA = (periods, startIndex = bars.length - 1) => {
+        if (startIndex < periods - 1) return null;
+        const sum = bars.slice(startIndex - periods + 1, startIndex + 1)
+          .reduce((acc, bar) => acc + bar.c, 0);
+        return sum / periods;
+      };
+      
+      const currentPrice = bars[bars.length - 1].c;
+      const currentVolume = bars[bars.length - 1].v;
+      
+      // Calculate key technical indicators
+      const sma10 = calculateSMA(10);
+      const sma20 = calculateSMA(20);
+      const sma50 = calculateSMA(50);
+      const sma200 = calculateSMA(200);
+      
+      // Calculate average volume (20 days)
+      const avgVolume20Days = bars.slice(-20).reduce((acc, bar) => acc + bar.v, 0) / 20;
+      
+      // Calculate 30-day price change
+      const price30DaysAgo = bars[bars.length - 31]?.c || currentPrice;
+      const priceChange30Days = ((currentPrice - price30DaysAgo) / price30DaysAgo) * 100;
+
+      // Build comprehensive technical analysis
+      const analysis: any = {
+        symbol: symbol.toUpperCase(),
+        criteria: {
+          highVolume: {
+            value: currentVolume > avgVolume20Days * 1.5,
+            description: `Volume (${Math.round(currentVolume/1000)}K) vs avg (${Math.round(avgVolume20Days/1000)}K)`,
+            weight: 2
           },
-          technicalScore: 3,
-          maxScore: 3,
-          scorePercentage: 100,
-          marketData: {
-            note: "Using estimated analysis due to API limits"
+          priceAbove10: {
+            value: sma10 ? currentPrice > sma10 : false,
+            description: sma10 ? `Price ($${currentPrice.toFixed(2)}) > 10 SMA ($${sma10.toFixed(2)})` : 'Insufficient data for 10 SMA',
+            weight: 1
+          },
+          priceAbove20: {
+            value: sma20 ? currentPrice > sma20 : false,
+            description: sma20 ? `Price ($${currentPrice.toFixed(2)}) > 20 SMA ($${sma20.toFixed(2)})` : 'Insufficient data for 20 SMA',
+            weight: 2
+          },
+          sma10Above20: {
+            value: sma10 && sma20 ? sma10 > sma20 : false,
+            description: sma10 && sma20 ? `10 SMA ($${sma10.toFixed(2)}) > 20 SMA ($${sma20.toFixed(2)})` : 'Insufficient data for SMA comparison',
+            weight: 1
+          },
+          sma20Above50: {
+            value: sma20 && sma50 ? sma20 > sma50 : false,
+            description: sma20 && sma50 ? `20 SMA ($${sma20.toFixed(2)}) > 50 SMA ($${sma50.toFixed(2)})` : 'Insufficient data for SMA comparison',
+            weight: 1
+          },
+          sma50Above200: {
+            value: sma50 && sma200 ? sma50 > sma200 : false,
+            description: sma50 && sma200 ? `50 SMA ($${sma50.toFixed(2)}) > 200 SMA ($${sma200.toFixed(2)})` : 'Insufficient data for SMA comparison',
+            weight: 1
+          },
+          priceAbove200: {
+            value: sma200 ? currentPrice > sma200 : false,
+            description: sma200 ? `Price ($${currentPrice.toFixed(2)}) > 200 SMA ($${sma200.toFixed(2)})` : 'Insufficient data for 200 SMA',
+            weight: 1
+          },
+          positiveMonthly: {
+            value: priceChange30Days > 0,
+            description: `30-day change: ${priceChange30Days.toFixed(1)}%`,
+            weight: 1
           }
-        };
-        return res.json(analysis);
-      }
-      
-      if (!quoteData['Global Quote']) {
-        console.log('No quote data available for', symbol);
-        return res.status(404).json({ message: 'Stock data not available' });
-      }
+        },
+        marketData: {
+          currentPrice: currentPrice.toFixed(2),
+          sma10: sma10?.toFixed(2) || 'N/A',
+          sma20: sma20?.toFixed(2) || 'N/A',
+          sma50: sma50?.toFixed(2) || 'N/A',
+          sma200: sma200?.toFixed(2) || 'N/A',
+          volume: currentVolume,
+          avgVolume: Math.round(avgVolume20Days),
+          priceChange30d: priceChange30Days.toFixed(1),
+          dataSource: 'Polygon.io'
+        }
+      };
 
-      const timeSeriesData = dailyData['Time Series (Daily)'];
-      const dates = Object.keys(timeSeriesData).sort().reverse(); // Most recent first
+      // Calculate total score
+      let totalScore = 0;
+      let maxPossibleScore = 0;
       
-      if (dates.length < 200) {
-        return res.status(400).json({ message: 'Insufficient data for analysis' });
-      }
+      Object.values(analysis.criteria).forEach(criterion => {
+        maxPossibleScore += criterion.weight;
+        if (criterion.value) {
+          totalScore += criterion.weight;
+        }
+      });
 
-      // Calculate moving averages and technical indicators
+      analysis.technicalScore = totalScore;
+      analysis.maxScore = maxPossibleScore;
+      analysis.scorePercentage = Math.round((totalScore / maxPossibleScore) * 100);
+
+      console.log(`Analysis complete for ${symbol}: ${totalScore}/${maxPossibleScore} (${analysis.scorePercentage}%)`);
+      res.json(analysis);
+    } catch (error) {
+      console.error('Technical analysis error:', error);
+      res.status(500).json({ message: 'Failed to perform technical analysis' });
+    }
+  });
+
+  // Market data endpoint (simulated)
       const prices = dates.slice(0, 200).map(date => ({
         date,
         close: parseFloat(timeSeriesData[date]['4. close']),
