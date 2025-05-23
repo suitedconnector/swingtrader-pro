@@ -252,7 +252,7 @@ export async function registerRoutes(app: Express) {
       
       const data = await response.json();
       
-      if (data.status !== 'OK' || !data.results || data.results.length < 50) {
+      if (data.status !== 'OK' || !data.results || data.results.length < 20) {
         return res.status(404).json({ 
           message: 'Unable to fetch sufficient data for analysis'
         });
