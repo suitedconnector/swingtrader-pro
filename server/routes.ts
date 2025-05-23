@@ -219,6 +219,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get stock price and breakout suggestion
+  app.get('/api/stock-price/:symbol', async (req, res) => {
+    try {
+      const { symbol } = req.params;
+      const apiKey = process.env.ALPHA_VANTAGE_API_KEY;
+      
+      if (!apiKey) {
+        return res.status(500).json({ message: 'API key not configured' });
+      }
+
+      const response = await fetch(`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${symbol.toUpperCase()}&apikey=${apiKey}`);
+      const data = await response.json();
+      
+      if (data['Global Quote'] && data['Global Quote']['05. price']) {
+        const currentPrice = parseFloat(data['Global Quote']['05. price']);
+        const dayHigh = parseFloat(data['Global Quote']['03. high']) || currentPrice;
+        const dayLow = parseFloat(data['Global Quote']['04. low']) || currentPrice;
+        
+        // Suggest breakout level: 3% above current price, but consider day's range
+        const rangeBreakout = dayHigh * 1.02;
+        const percentBreakout = currentPrice * 1.03;
+        const suggestedBreakout = Math.max(rangeBreakout, percentBreakout);
+        
+        res.json({
+          symbol: symbol.toUpperCase(),
+          currentPrice: currentPrice.toFixed(2),
+          suggestedBreakout: suggestedBreakout.toFixed(2),
+          dayHigh: dayHigh.toFixed(2),
+          dayLow: dayLow.toFixed(2)
+        });
+      } else {
+        res.status(404).json({ message: 'Stock not found' });
+      }
+    } catch (error) {
+      console.error('Stock price error:', error);
+      res.status(500).json({ message: 'Failed to fetch stock price' });
+    }
+  });
+
   // Market data endpoint (simulated)
   app.get("/api/market-data", async (req, res) => {
     try {

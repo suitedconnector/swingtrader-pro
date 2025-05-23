@@ -71,19 +71,13 @@ export function PreEntryPhase() {
     
     setIsLoadingPrice(true);
     try {
-      const response = await fetch(`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${symbol.toUpperCase()}&apikey=${import.meta.env.VITE_ALPHA_VANTAGE_API_KEY || process.env.ALPHA_VANTAGE_API_KEY}`);
+      const response = await fetch(`/api/stock-price/${symbol.toUpperCase()}`);
       const data = await response.json();
       
-      if (data['Global Quote'] && data['Global Quote']['05. price']) {
-        const currentPrice = parseFloat(data['Global Quote']['05. price']);
-        const high52Week = parseFloat(data['Global Quote']['03. high']) || currentPrice;
-        
-        // Suggest breakout level: 2-5% above current price or near 52-week high
-        const breakoutSuggestion = Math.min(currentPrice * 1.03, high52Week * 0.98);
-        
+      if (response.ok && data.suggestedBreakout) {
         setAlertForm(prev => ({
           ...prev,
-          targetPrice: breakoutSuggestion.toFixed(2)
+          targetPrice: data.suggestedBreakout
         }));
       }
     } catch (error) {
