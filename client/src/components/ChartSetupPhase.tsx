@@ -166,10 +166,10 @@ export function ChartSetupPhase() {
           <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
             <h4 className="font-medium text-gray-900 dark:text-white mb-2">Moving Averages</h4>
             <div className="space-y-1 text-sm">
-              <div>10 SMA: <span className="font-mono">${analysisData.marketData.sma10}</span></div>
-              <div>20 SMA: <span className="font-mono">${analysisData.marketData.sma20}</span></div>
-              <div>50 SMA: <span className="font-mono">${analysisData.marketData.sma50}</span></div>
-              <div>200 SMA: <span className="font-mono">${analysisData.marketData.sma200}</span></div>
+              <div>10 SMA: <span className={`font-mono ${analysisData.technicalIndicators?.sma10 === 'bullish' ? 'text-green-600' : 'text-red-600'}`}>{analysisData.technicalIndicators?.sma10 || 'N/A'}</span></div>
+              <div>20 SMA: <span className={`font-mono ${analysisData.technicalIndicators?.sma20 === 'bullish' ? 'text-green-600' : 'text-red-600'}`}>{analysisData.technicalIndicators?.sma20 || 'N/A'}</span></div>
+              <div>50 SMA: <span className={`font-mono ${analysisData.technicalIndicators?.sma50 === 'bullish' ? 'text-green-600' : 'text-red-600'}`}>{analysisData.technicalIndicators?.sma50 || 'N/A'}</span></div>
+              <div>200 SMA: <span className={`font-mono ${analysisData.technicalIndicators?.sma200 === 'bullish' ? 'text-green-600' : 'text-red-600'}`}>{analysisData.technicalIndicators?.sma200 || 'N/A'}</span></div>
             </div>
           </div>
         </div>
@@ -203,7 +203,7 @@ export function ChartSetupPhase() {
               {Object.entries(analysisData.criteria).slice(5).map(([key, criterion]: [string, any]) => (
                 <div key={key} className="flex items-center space-x-3">
                   <Checkbox checked={criterion.value} disabled />
-                  <span className="text-sm">{criterion.description}</span>
+                  <span className="text-sm">{criterion.label}</span>
                 </div>
               ))}
             </div>
