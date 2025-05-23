@@ -3,9 +3,10 @@ import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { apiRequest } from '@/lib/queryClient';
 import type { PositionCalculation, AccountSettings } from '@/lib/types';
-import type { Trade } from '@shared/schema';
+import type { Trade, Stock } from '@shared/schema';
 
 export function EntryPhase() {
   const queryClient = useQueryClient();
@@ -21,6 +22,14 @@ export function EntryPhase() {
     riskPercent: accountSettings.defaultRiskPercent.toString(),
   });
 
+  const [isCalculatingPrices, setIsCalculatingPrices] = useState(false);
+  const [priceCalculations, setPriceCalculations] = useState<{
+    currentPrice: number;
+    suggestedEntry: number;
+    suggestedStopLoss: number;
+    reasoning: string;
+  } | null>(null);
+
   const [calculation, setCalculation] = useState<PositionCalculation>({
     riskAmount: 0,
     riskPerShare: 0,
@@ -32,6 +41,57 @@ export function EntryPhase() {
   const { data: activeTrades = [] } = useQuery<Trade[]>({
     queryKey: ['/api/trades', { active: true }],
   });
+
+  const { data: stocks = [] } = useQuery<Stock[]>({
+    queryKey: ['/api/stocks'],
+  });
+
+  // Get all available symbols from watchlists
+  const allStocks = Array.from(new Set(stocks.map(stock => stock.symbol)));
+
+  // Function to automatically calculate entry and stop loss prices
+  const calculateOptimalPrices = async (symbol: string) => {
+    setIsCalculatingPrices(true);
+    try {
+      // Get current market data and suggested breakout price
+      const response = await fetch(`/api/stock-price/${symbol}`);
+      const data = await response.json();
+      
+      if (data.currentPrice && data.suggestedBreakout) {
+        const currentPrice = parseFloat(data.currentPrice);
+        const suggestedEntry = parseFloat(data.suggestedBreakout);
+        
+        // Calculate stop loss based on common swing trading rules
+        // Option 1: 8% below entry (conservative)
+        // Option 2: Below recent low (technical)
+        const conservativeStop = suggestedEntry * 0.92; // 8% stop loss
+        const technicalStop = Math.min(conservativeStop, currentPrice * 0.95); // 5% below current price
+        
+        const suggestedStopLoss = Math.max(technicalStop, suggestedEntry * 0.85); // Max 15% stop
+        
+        let reasoning = `Entry: Breakout above $${currentPrice.toFixed(2)} (current price). `;
+        reasoning += `Stop: ${((suggestedEntry - suggestedStopLoss) / suggestedEntry * 100).toFixed(1)}% risk below entry.`;
+        
+        setPriceCalculations({
+          currentPrice,
+          suggestedEntry,
+          suggestedStopLoss,
+          reasoning
+        });
+        
+        // Auto-populate the form
+        setPositionForm(prev => ({
+          ...prev,
+          entryPrice: suggestedEntry.toFixed(2),
+          stopLoss: suggestedStopLoss.toFixed(2)
+        }));
+      }
+    } catch (error) {
+      console.error('Error calculating prices:', error);
+    } finally {
+      setIsCalculatingPrices(false);
+    }
+  };
 
   const createTradeMutation = useMutation({
     mutationFn: (tradeData: {
@@ -130,14 +190,52 @@ export function EntryPhase() {
             </div>
             <div>
               <Label htmlFor="symbol">Stock Symbol</Label>
-              <Input
-                id="symbol"
-                value={positionForm.symbol}
-                onChange={(e) => setPositionForm(prev => ({ ...prev, symbol: e.target.value }))}
-                placeholder="e.g., NVDA"
-                className="uppercase"
-              />
+              <div className="flex space-x-2">
+                <Select 
+                  value={positionForm.symbol} 
+                  onValueChange={(value) => {
+                    setPositionForm(prev => ({ ...prev, symbol: value }));
+                    setPriceCalculations(null);
+                  }}
+                >
+                  <SelectTrigger className="flex-1">
+                    <SelectValue placeholder="Choose from watchlist" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {allStocks.map((symbol) => (
+                      <SelectItem key={symbol} value={symbol}>
+                        {symbol}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  type="button"
+                  onClick={() => positionForm.symbol && calculateOptimalPrices(positionForm.symbol)}
+                  disabled={!positionForm.symbol || isCalculatingPrices}
+                  className="px-4"
+                >
+                  {isCalculatingPrices ? (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  ) : (
+                    'Auto Calculate'
+                  )}
+                </Button>
+              </div>
             </div>
+
+            {priceCalculations && (
+              <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 space-y-2">
+                <h5 className="font-medium text-blue-900 dark:text-blue-100">Automated Price Analysis</h5>
+                <div className="text-sm space-y-1">
+                  <div>Current Price: <span className="font-mono">${priceCalculations.currentPrice.toFixed(2)}</span></div>
+                  <div>Suggested Entry: <span className="font-mono text-green-600">${priceCalculations.suggestedEntry.toFixed(2)}</span></div>
+                  <div>Suggested Stop: <span className="font-mono text-red-600">${priceCalculations.suggestedStopLoss.toFixed(2)}</span></div>
+                  <p className="text-xs text-blue-700 dark:text-blue-300 mt-2">{priceCalculations.reasoning}</p>
+                </div>
+              </div>
+            )}
+
             <div>
               <Label htmlFor="entryPrice">Entry Price ($)</Label>
               <Input
@@ -146,7 +244,8 @@ export function EntryPhase() {
                 step="0.01"
                 value={positionForm.entryPrice}
                 onChange={(e) => setPositionForm(prev => ({ ...prev, entryPrice: e.target.value }))}
-                placeholder="0.00"
+                placeholder="Auto-calculated or manual entry"
+                className={priceCalculations ? 'bg-green-50 dark:bg-green-900/20' : ''}
               />
             </div>
             <div>
@@ -157,7 +256,8 @@ export function EntryPhase() {
                 step="0.01"
                 value={positionForm.stopLoss}
                 onChange={(e) => setPositionForm(prev => ({ ...prev, stopLoss: e.target.value }))}
-                placeholder="0.00"
+                placeholder="Auto-calculated or manual entry"
+                className={priceCalculations ? 'bg-red-50 dark:bg-red-900/20' : ''}
               />
             </div>
           </form>
