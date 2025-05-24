@@ -176,36 +176,60 @@ export async function registerRoutes(app: Express) {
         'DIS', 'ADBE', 'CRM', 'NOW', 'ORCL'
       ];
       
-      const { runYfinanceAnalysis } = require('./yfinance_analysis');
+      const { exec } = require('child_process');
       const processedResults = [];
       
       for (const symbol of scanSymbols) {
         try {
-          const analysis = await runYfinanceAnalysis(symbol);
-          
-          if (analysis && !analysis.error) {
-            // Only include stocks with strong momentum and good score
-            const priceChange = analysis.marketData?.priceChange30d || 0;
-            const score = analysis.scorePercentage || 0;
+          // Run yfinance analysis via Python script
+          const analysis = await new Promise((resolve, reject) => {
+            const pythonPath = '/home/runner/workspace/.pythonlibs/bin/python3';
+            const scriptPath = './server/technical_analysis.py';
+            const command = `${pythonPath} ${scriptPath} ${symbol}`;
             
-            if (priceChange > 3 && score > 40 && analysis.currentPrice > 1) {
+            exec(command, (error: any, stdout: string, stderr: string) => {
+              if (error) {
+                reject(new Error(`Analysis failed for ${symbol}`));
+                return;
+              }
+              
+              try {
+                const result = JSON.parse(stdout.trim());
+                if (result.error) {
+                  reject(new Error(result.error));
+                } else {
+                  resolve(result);
+                }
+              } catch (parseError) {
+                reject(new Error('Failed to parse analysis'));
+              }
+            });
+          });
+          
+          if (analysis && typeof analysis === 'object' && 'currentPrice' in analysis) {
+            // Only include stocks with strong momentum and good score
+            const priceChange = (analysis as any).marketData?.priceChange30d || 0;
+            const score = (analysis as any).scorePercentage || 0;
+            const currentPrice = (analysis as any).currentPrice || 0;
+            
+            if (priceChange > 3 && score > 40 && currentPrice > 1) {
               await storage.createScanResult({
                 symbol: symbol,
                 scanType: '1day',
-                price: analysis.currentPrice.toString(),
+                price: currentPrice.toString(),
                 change: (priceChange / 30).toFixed(2), // Approximate daily change
                 changePercent: priceChange.toFixed(2),
-                volume: analysis.marketData?.volume || 0,
+                volume: (analysis as any).marketData?.volume || 0,
                 sector: getSectorForSymbol(symbol),
                 adr: priceChange > 10 ? priceChange.toString() : null,
-                dollarVolume: (analysis.currentPrice * (analysis.marketData?.volume || 0)).toString()
+                dollarVolume: (currentPrice * ((analysis as any).marketData?.volume || 0)).toString()
               });
               
               processedResults.push(symbol);
             }
           }
-        } catch (error) {
-          console.log(`Skipping ${symbol}: ${error.message}`);
+        } catch (error: any) {
+          console.log(`Skipping ${symbol}: ${error.message || 'Unknown error'}`);
         }
       }
       
