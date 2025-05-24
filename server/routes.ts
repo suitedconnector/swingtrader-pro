@@ -193,8 +193,11 @@ export async function registerRoutes(app: Express) {
       ];
       const processedResults = [];
       
+      console.log(`Starting scan of ${scanSymbols.length} symbols...`);
+      
       for (const symbol of scanSymbols) {
         try {
+          console.log(`Scanning ${symbol}...`);
           // Get yfinance data using EXACT same method as verification endpoint
           const yfinanceData = await new Promise((resolve, reject) => {
             exec(`python3 -c "
@@ -231,8 +234,10 @@ else:
           
           if (yfinanceData && (yfinanceData as any).price) {
             const data = yfinanceData as any;
+            console.log(`${symbol}: Price=$${data.price.toFixed(2)}, Change=${data.change_percent.toFixed(1)}%`);
+            
             // Only include stocks with positive momentum
-            if (data.change_percent > 1) {
+            if (data.change_percent > 3) {
               await storage.createScanResult({
                 symbol: symbol,
                 scanType: '1day',
@@ -246,10 +251,15 @@ else:
               });
               
               processedResults.push(symbol);
+              console.log(`✓ ${symbol} qualifies with ${data.change_percent.toFixed(1)}% momentum`);
+            } else {
+              console.log(`✗ ${symbol} filtered out: ${data.change_percent.toFixed(1)}% < 3%`);
             }
+          } else {
+            console.log(`✗ ${symbol}: No valid data received`);
           }
         } catch (error: any) {
-          console.log(`Skipping ${symbol}: ${error.message}`);
+          console.log(`✗ ${symbol}: Error - ${error.message}`);
         }
       }
       
