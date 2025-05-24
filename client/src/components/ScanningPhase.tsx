@@ -9,15 +9,9 @@ import type { ScanResult, Watchlist } from '@shared/schema';
 export function ScanningPhase() {
   const queryClient = useQueryClient();
   const [selectedSector, setSelectedSector] = useState<string>('all');
-  const [scanChecklist, setScanChecklist] = useState({
-    oneMonth: false,
-    threeMonth: false,
-    sixMonth: false,
-    oneWeek: false,
-    top2Percent: false,
-    adr5Percent: false,
-    price1Dollar: false,
-    volume30Million: false,
+  // Market data for context
+  const { data: marketData } = useQuery<any>({
+    queryKey: ['/api/market-data'],
   });
 
   // Top trading sectors (excluding biotech)
@@ -73,10 +67,6 @@ export function ScanningPhase() {
     },
   });
 
-  const handleChecklistChange = (key: keyof typeof scanChecklist) => {
-    setScanChecklist(prev => ({ ...prev, [key]: !prev[key] }));
-  };
-
   const handleRunScans = () => {
     runScansMutation.mutate();
   };
@@ -97,6 +87,16 @@ export function ScanningPhase() {
     return result.sector.toLowerCase().includes(selectedSector.toLowerCase());
   });
 
+  // Calculate summary statistics
+  const scanStats = {
+    totalResults: filteredScanResults.length,
+    strongGainers: filteredScanResults.filter(r => parseFloat(r.changePercent) > 10).length,
+    topSectors: Array.from(new Set(filteredScanResults.map(r => r.sector))).slice(0, 3),
+    avgGain: filteredScanResults.length > 0 
+      ? (filteredScanResults.reduce((sum, r) => sum + parseFloat(r.changePercent), 0) / filteredScanResults.length).toFixed(1)
+      : '0'
+  };
+
   return (
     <div className="bg-white dark:bg-dark-surface rounded-xl shadow-sm border border-gray-200 dark:border-dark-border p-6">
       <h3 className="text-lg font-semibold mb-4 flex items-center">
@@ -105,89 +105,99 @@ export function ScanningPhase() {
       </h3>
       
       <div className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-3">
-            <h4 className="font-medium text-gray-900 dark:text-white">Scan Execution</h4>
-            <div className="space-y-2">
-              <label className="flex items-center space-x-3">
-                <Checkbox
-                  checked={scanChecklist.oneMonth}
-                  onCheckedChange={() => handleChecklistChange('oneMonth')}
-                />
-                <span className="text-sm">One-Month Gainer Scan</span>
-              </label>
-              <label className="flex items-center space-x-3">
-                <Checkbox
-                  checked={scanChecklist.threeMonth}
-                  onCheckedChange={() => handleChecklistChange('threeMonth')}
-                />
-                <span className="text-sm">Three-Month Gainer Scan</span>
-              </label>
-              <label className="flex items-center space-x-3">
-                <Checkbox
-                  checked={scanChecklist.sixMonth}
-                  onCheckedChange={() => handleChecklistChange('sixMonth')}
-                />
-                <span className="text-sm">Six-Month Gainer Scan</span>
-              </label>
-              <label className="flex items-center space-x-3">
-                <Checkbox
-                  checked={scanChecklist.oneWeek}
-                  onCheckedChange={() => handleChecklistChange('oneWeek')}
-                />
-                <span className="text-sm">One-Week Gainer Scan</span>
-              </label>
+        {/* Market Overview */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+          <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+            <h4 className="font-medium text-gray-900 dark:text-white mb-2">Market Context</h4>
+            {marketData ? (
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span>SPY:</span>
+                  <span className="font-mono">${marketData.spy.price} {marketData.spy.change}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>NASDAQ:</span>
+                  <span className="font-mono">${marketData.nasdaq.price} {marketData.nasdaq.change}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>VIX:</span>
+                  <span className="font-mono">${marketData.vix.price} {marketData.vix.change}</span>
+                </div>
+                <div className="pt-2 border-t border-gray-200 dark:border-gray-600">
+                  <span className="text-xs text-gray-600 dark:text-gray-400">Trend: </span>
+                  <span className={`text-xs font-medium ${
+                    marketData.trend === 'Bullish' ? 'text-green-600' : 
+                    marketData.trend === 'Bearish' ? 'text-red-600' : 'text-yellow-600'
+                  }`}>
+                    {marketData.trend}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500">Loading market data...</p>
+            )}
+          </div>
+
+          <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+            <h4 className="font-medium text-gray-900 dark:text-white mb-2">Scan Statistics</h4>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span>Total Results:</span>
+                <span className="font-medium">{scanStats.totalResults}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Strong Gainers (&gt;10%):</span>
+                <span className="font-medium text-green-600">{scanStats.strongGainers}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Average Gain:</span>
+                <span className="font-medium">{scanStats.avgGain}%</span>
+              </div>
+              <div className="pt-2 border-t border-gray-200 dark:border-gray-600">
+                <span className="text-xs text-gray-600 dark:text-gray-400">Top Sectors: </span>
+                <span className="text-xs">{scanStats.topSectors.join(', ')}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+            <h4 className="font-medium text-gray-900 dark:text-white mb-2">Scan Criteria</h4>
+            <div className="space-y-1 text-xs text-gray-600 dark:text-gray-400">
+              <div className="flex items-center">
+                <i className="fas fa-check text-green-500 w-4"></i>
+                <span>Price &gt; $1.00</span>
+              </div>
+              <div className="flex items-center">
+                <i className="fas fa-check text-green-500 w-4"></i>
+                <span>Change &gt; 5%</span>
+              </div>
+              <div className="flex items-center">
+                <i className="fas fa-check text-green-500 w-4"></i>
+                <span>Volume &gt; 100K</span>
+              </div>
+              <div className="flex items-center">
+                <i className="fas fa-check text-green-500 w-4"></i>
+                <span>Top gainers only</span>
+              </div>
             </div>
             <div className="flex space-x-2 mt-4">
               <Button 
                 onClick={handleRunScans} 
                 disabled={runScansMutation.isPending}
-                className="flex-1"
+                className="flex-1 text-xs"
+                size="sm"
               >
-                {runScansMutation.isPending ? 'Running Scans...' : 'Run All Scans'}
+                {runScansMutation.isPending ? 'Scanning...' : 'Run Scan'}
               </Button>
               <Button 
                 onClick={() => resetScansMutation.mutate()} 
                 disabled={resetScansMutation.isPending}
                 variant="outline"
-                className="flex-1"
+                className="flex-1 text-xs"
+                size="sm"
               >
-                {resetScansMutation.isPending ? 'Clearing...' : 'Reset Results'}
+                {resetScansMutation.isPending ? 'Clearing...' : 'Reset'}
               </Button>
-            </div>
-          </div>
-          
-          <div className="space-y-3">
-            <h4 className="font-medium text-gray-900 dark:text-white">Scan Criteria Verification</h4>
-            <div className="space-y-2">
-              <label className="flex items-center space-x-3">
-                <Checkbox
-                  checked={scanChecklist.top2Percent}
-                  onCheckedChange={() => handleChecklistChange('top2Percent')}
-                />
-                <span className="text-sm">Top 2% strongest stocks</span>
-              </label>
-              <label className="flex items-center space-x-3">
-                <Checkbox
-                  checked={scanChecklist.adr5Percent}
-                  onCheckedChange={() => handleChecklistChange('adr5Percent')}
-                />
-                <span className="text-sm">ADR {'>'} 5%</span>
-              </label>
-              <label className="flex items-center space-x-3">
-                <Checkbox
-                  checked={scanChecklist.price1Dollar}
-                  onCheckedChange={() => handleChecklistChange('price1Dollar')}
-                />
-                <span className="text-sm">Price {'>'} $1.00</span>
-              </label>
-              <label className="flex items-center space-x-3">
-                <Checkbox
-                  checked={scanChecklist.volume30Million}
-                  onCheckedChange={() => handleChecklistChange('volume30Million')}
-                />
-                <span className="text-sm">Dollar Volume {'>'}$30M</span>
-              </label>
             </div>
           </div>
         </div>
