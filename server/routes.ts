@@ -158,10 +158,10 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  // Run scans using same approach as technical analysis
+  // Run scans with yfinance data (same method as verification endpoint)
   app.post("/api/run-scans", async (req, res) => {
     try {
-      console.log('Running scans...');
+      console.log('Running scans with yfinance...');
       
       // Clear old scan results first
       await storage.clearOldScanResults();
@@ -172,25 +172,58 @@ export async function registerRoutes(app: Express) {
       
       for (const symbol of scanSymbols) {
         try {
-          // Use the same technical analysis function as Phase 2
-          const score = generateTechnicalScore(symbol);
-          const analysis = generateAnalysisDetails(symbol, score);
-          
-          // Only include stocks with good technical scores (60%+)
-          if (score >= 60) {
-            await storage.createScanResult({
-              symbol: symbol,
-              scanType: '1day',
-              price: analysis.currentPrice,
-              change: (parseFloat(analysis.currentPrice) * 0.02).toFixed(2),
-              changePercent: (score / 10).toFixed(1),
-              volume: parseInt(analysis.technicalIndicators.volume.replace(/[^\d]/g, '')) || 1000000,
-              sector: getSectorForSymbol(symbol),
-              adr: score > 80 ? (score / 10).toFixed(1) : null,
-              dollarVolume: (parseFloat(analysis.currentPrice) * 1000000).toString()
+          // Get yfinance data using EXACT same method as verification endpoint
+          const yfinanceData = await new Promise((resolve, reject) => {
+            exec(`python3 -c "
+import yfinance as yf
+import json
+ticker = yf.Ticker('${symbol}')
+info = ticker.info
+hist = ticker.history(period='30d')
+if not hist.empty:
+    latest = hist.iloc[-1]
+    first = hist.iloc[0]
+    change_pct = ((latest['Close'] - first['Close']) / first['Close']) * 100
+    result = {
+        'price': float(latest['Close']),
+        'volume': int(latest['Volume']),
+        'change_percent': float(change_pct),
+        'sector': info.get('sector', 'Technology')
+    }
+    print(json.dumps(result))
+else:
+    print('{}')
+"`, (error, stdout, stderr) => {
+              if (error) {
+                reject(error);
+              } else {
+                try {
+                  resolve(JSON.parse(stdout.trim() || '{}'));
+                } catch (parseError) {
+                  reject(parseError);
+                }
+              }
             });
-            
-            processedResults.push(symbol);
+          });
+          
+          if (yfinanceData && (yfinanceData as any).price) {
+            const data = yfinanceData as any;
+            // Only include stocks with positive momentum
+            if (data.change_percent > 3) {
+              await storage.createScanResult({
+                symbol: symbol,
+                scanType: '1day',
+                price: data.price.toFixed(2),
+                change: (data.price * data.change_percent / 100).toFixed(2),
+                changePercent: data.change_percent.toFixed(1),
+                volume: data.volume,
+                sector: data.sector || getSectorForSymbol(symbol),
+                adr: data.change_percent > 7 ? data.change_percent.toFixed(1) : null,
+                dollarVolume: (data.price * data.volume).toString()
+              });
+              
+              processedResults.push(symbol);
+            }
           }
         } catch (error: any) {
           console.log(`Skipping ${symbol}: ${error.message}`);
@@ -198,7 +231,7 @@ export async function registerRoutes(app: Express) {
       }
       
       console.log(`Processed ${processedResults.length} qualifying stocks: ${processedResults.join(', ')}`);
-      res.json({ message: `Scans completed. Found ${processedResults.length} qualifying stocks.` });
+      res.json({ message: `Scans completed with yfinance. Found ${processedResults.length} qualifying stocks.` });
     } catch (error: any) {
       console.error('Scan error:', error);
       res.status(500).json({ message: "Failed to run scans: " + error.message });
