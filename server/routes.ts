@@ -158,114 +158,51 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  // Run scans with yfinance data (same method as verification endpoint)
+  // Run scans with yfinance data - completely rewritten
   app.post("/api/run-scans", async (req, res) => {
     try {
-      console.log('Running scans with yfinance...');
+      console.log('=== STARTING FRESH SCAN ===');
       
-      // Clear old scan results first
+      // Force clear ALL existing results
       await storage.clearOldScanResults();
       
-      // Scan top 50 stocks across all sectors for reliable performance
-      const scanSymbols = [
-        // Technology Leaders
-        'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'TSLA', 'NVDA', 'CRM', 'ADBE', 'ORCL',
-        // Financial Services
-        'JPM', 'BAC', 'WFC', 'C', 'GS', 'V', 'MA', 'AXP', 'BRK-B', 'USB',
-        // Healthcare
-        'UNH', 'JNJ', 'PFE', 'ABBV', 'MRK', 'TMO', 'ABT', 'DHR', 'BMY', 'AMGN',
-        // Consumer & Retail
-        'HD', 'MCD', 'NKE', 'SBUX', 'LOW', 'PG', 'KO', 'PEP', 'WMT', 'COST',
-        // Energy & Materials
-        'XOM', 'CVX', 'COP', 'EOG', 'SLB', 'LIN', 'APD', 'ECL', 'SHW', 'NEM',
-        // Industrials & Utilities
-        'BA', 'CAT', 'GE', 'MMM', 'HON', 'NEE', 'DUK', 'SO', 'D', 'AEP',
-        // Communication & Media
-        'NFLX', 'DIS', 'CMCSA', 'VZ', 'T', 'CHTR', 'TMUS', 'AMD', 'INTC', 'CSCO'
-      ];
-      const processedResults = [];
+      // Use simple Python script for reliable scanning
+      console.log('Running Python scanner...');
       
-      console.log(`Starting scan of ${scanSymbols.length} symbols...`);
-      console.log(`Symbols to scan: ${scanSymbols.slice(0, 10).join(', ')}...`);
-      
-      let symbolCount = 0;
-      for (const symbol of scanSymbols) {
-        symbolCount++;
-        console.log(`[${symbolCount}/${scanSymbols.length}] Processing ${symbol}`);
-        try {
-          console.log(`Scanning ${symbol}...`);
-          // Get yfinance data with timeout to prevent hanging
-          const yfinanceData = await Promise.race([
-            new Promise((resolve, reject) => {
-              exec(`python3 -c "
-import yfinance as yf
-import json
-ticker = yf.Ticker('${symbol}')
-info = ticker.info
-hist = ticker.history(period='30d')
-if not hist.empty:
-    latest = hist.iloc[-1]
-    first = hist.iloc[0]
-    change_pct = ((latest['Close'] - first['Close']) / first['Close']) * 100
-    result = {
-        'price': float(latest['Close']),
-        'volume': int(latest['Volume']),
-        'change_percent': float(change_pct),
-        'sector': info.get('sector', 'Technology')
-    }
-    print(json.dumps(result))
-else:
-    print('{}')
-"`, (error, stdout, stderr) => {
-                if (error) {
-                  reject(error);
-                } else {
-                  try {
-                    resolve(JSON.parse(stdout.trim() || '{}'));
-                  } catch (parseError) {
-                    reject(parseError);
-                  }
-                }
-              });
-            }),
-            new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('Timeout')), 3000)
-            )
-          ]);
-          
-          if (yfinanceData && (yfinanceData as any).price) {
-            const data = yfinanceData as any;
-            console.log(`${symbol}: Price=$${data.price.toFixed(2)}, Change=${data.change_percent.toFixed(1)}%`);
-            
-            // Only include stocks with positive momentum
-            if (data.change_percent > 3) {
-              await storage.createScanResult({
-                symbol: symbol,
-                scanType: '1day',
-                price: data.price.toFixed(2),
-                change: (data.price * data.change_percent / 100).toFixed(2),
-                changePercent: data.change_percent.toFixed(1),
-                volume: data.volume,
-                sector: data.sector || getSectorForSymbol(symbol),
-                adr: data.change_percent > 7 ? data.change_percent.toFixed(1) : null,
-                dollarVolume: (data.price * data.volume).toString()
-              });
-              
-              processedResults.push(symbol);
-              console.log(`✓ ${symbol} qualifies with ${data.change_percent.toFixed(1)}% momentum`);
-            } else {
-              console.log(`✗ ${symbol} filtered out: ${data.change_percent.toFixed(1)}% < 3%`);
-            }
+      const { stdout, stderr } = await new Promise<{stdout: string, stderr: string}>((resolve, reject) => {
+        exec('python3 server/simple_scan.py', { timeout: 30000 }, (error, stdout, stderr) => {
+          if (error) {
+            reject(error);
           } else {
-            console.log(`✗ ${symbol}: No valid data received`);
+            resolve({ stdout, stderr });
           }
-        } catch (error: any) {
-          console.log(`✗ ${symbol}: Error - ${error.message}`);
-        }
+        });
+      });
+
+      console.log('Scanner output:', stderr);
+      
+      const qualifyingStocks = JSON.parse(stdout.trim());
+      console.log(`Found ${qualifyingStocks.length} qualifying stocks`);
+      
+      // Store each qualifying stock
+      for (const stock of qualifyingStocks) {
+        await storage.createScanResult({
+          symbol: stock.symbol,
+          scanType: '1day',
+          price: stock.price.toFixed(2),
+          change: (stock.price * stock.change_percent / 100).toFixed(2),
+          changePercent: stock.change_percent.toFixed(1),
+          volume: stock.volume,
+          sector: stock.sector,
+          adr: stock.change_percent > 7 ? stock.change_percent.toFixed(1) : null,
+          dollarVolume: (stock.price * stock.volume).toString()
+        });
       }
       
-      console.log(`Processed ${processedResults.length} qualifying stocks: ${processedResults.join(', ')}`);
-      res.json({ message: `Scans completed with yfinance. Found ${processedResults.length} qualifying stocks.` });
+      res.json({ 
+        message: `Scan completed. Found ${qualifyingStocks.length} stocks meeting Morgan's criteria.`,
+        count: qualifyingStocks.length
+      });
     } catch (error: any) {
       console.error('Scan error:', error);
       res.status(500).json({ message: "Failed to run scans: " + error.message });
