@@ -166,36 +166,32 @@ export async function registerRoutes(app: Express) {
       // Clear old scan results first
       await storage.clearOldScanResults();
       
-      // Scan a broader selection of stocks across all sectors
+      // Scan top 50 stocks across all sectors for reliable performance
       const scanSymbols = [
-        // Technology
-        'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'TSLA', 'NVDA', 'CRM', 'ADBE', 'ORCL', 'NFLX', 'AMD', 'INTC', 'CSCO', 'IBM',
+        // Technology Leaders
+        'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'TSLA', 'NVDA', 'CRM', 'ADBE', 'ORCL',
         // Financial Services
-        'JPM', 'BAC', 'WFC', 'C', 'GS', 'MS', 'V', 'MA', 'AXP', 'BRK.B', 'USB', 'PNC', 'TFC', 'COF', 'SCHW',
+        'JPM', 'BAC', 'WFC', 'C', 'GS', 'V', 'MA', 'AXP', 'BRK-B', 'USB',
         // Healthcare
-        'UNH', 'JNJ', 'PFE', 'ABBV', 'MRK', 'TMO', 'ABT', 'DHR', 'BMY', 'AMGN', 'GILD', 'MDT', 'CVS', 'CI', 'HUM',
-        // Consumer Discretionary
-        'AMZN', 'TSLA', 'HD', 'MCD', 'NKE', 'SBUX', 'LOW', 'TJX', 'BKNG', 'MAR', 'GM', 'F', 'CCL', 'NCLH', 'RCL',
-        // Consumer Staples
-        'PG', 'KO', 'PEP', 'WMT', 'COST', 'CL', 'KMB', 'GIS', 'K', 'HSY', 'MO', 'PM', 'BTI', 'UL', 'MDLZ',
-        // Energy
-        'XOM', 'CVX', 'COP', 'EOG', 'SLB', 'PSX', 'VLO', 'MPC', 'OXY', 'BKR', 'HAL', 'DVN', 'FANG', 'APA', 'HES',
-        // Industrials
-        'BA', 'CAT', 'GE', 'MMM', 'HON', 'UPS', 'LMT', 'RTX', 'DE', 'EMR', 'ETN', 'PH', 'CMI', 'ITW', 'GD',
-        // Materials
-        'LIN', 'APD', 'ECL', 'SHW', 'DD', 'DOW', 'NEM', 'FCX', 'VMC', 'MLM', 'PPG', 'RPM', 'IFF', 'ALB', 'CF',
-        // Utilities
-        'NEE', 'DUK', 'SO', 'D', 'AEP', 'EXC', 'XEL', 'SRE', 'PEG', 'ED', 'FE', 'ETR', 'ES', 'AWK', 'WEC',
-        // Real Estate
-        'AMT', 'PLD', 'CCI', 'EQIX', 'PSA', 'WELL', 'SPG', 'O', 'SBAC', 'DLR', 'REG', 'BXP', 'ARE', 'UDR', 'EQR',
-        // Communication Services
-        'GOOGL', 'META', 'NFLX', 'DIS', 'CMCSA', 'VZ', 'T', 'CHTR', 'TMUS', 'NWSA', 'FOXA', 'IPG', 'OMC', 'TTWO', 'EA'
+        'UNH', 'JNJ', 'PFE', 'ABBV', 'MRK', 'TMO', 'ABT', 'DHR', 'BMY', 'AMGN',
+        // Consumer & Retail
+        'HD', 'MCD', 'NKE', 'SBUX', 'LOW', 'PG', 'KO', 'PEP', 'WMT', 'COST',
+        // Energy & Materials
+        'XOM', 'CVX', 'COP', 'EOG', 'SLB', 'LIN', 'APD', 'ECL', 'SHW', 'NEM',
+        // Industrials & Utilities
+        'BA', 'CAT', 'GE', 'MMM', 'HON', 'NEE', 'DUK', 'SO', 'D', 'AEP',
+        // Communication & Media
+        'NFLX', 'DIS', 'CMCSA', 'VZ', 'T', 'CHTR', 'TMUS', 'AMD', 'INTC', 'CSCO'
       ];
       const processedResults = [];
       
       console.log(`Starting scan of ${scanSymbols.length} symbols...`);
+      console.log(`Symbols to scan: ${scanSymbols.slice(0, 10).join(', ')}...`);
       
+      let symbolCount = 0;
       for (const symbol of scanSymbols) {
+        symbolCount++;
+        console.log(`[${symbolCount}/${scanSymbols.length}] Processing ${symbol}`);
         try {
           console.log(`Scanning ${symbol}...`);
           // Get yfinance data with timeout to prevent hanging
