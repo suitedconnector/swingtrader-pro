@@ -161,23 +161,35 @@ export function ScanningPhase() {
           </div>
 
           <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
-            <h4 className="font-medium text-gray-900 dark:text-white mb-2">Scan Criteria</h4>
+            <h4 className="font-medium text-gray-900 dark:text-white mb-2">Scan Status</h4>
             <div className="space-y-1 text-xs text-gray-600 dark:text-gray-400">
-              <div className="flex items-center">
-                <i className="fas fa-check text-green-500 w-4"></i>
-                <span>Price &gt; $1.00</span>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <i className="fas fa-check text-green-500 w-4"></i>
+                  <span>Moving Averages</span>
+                </div>
+                <span className="text-green-600 font-medium">Above 20-day</span>
               </div>
-              <div className="flex items-center">
-                <i className="fas fa-check text-green-500 w-4"></i>
-                <span>Change &gt; 5%</span>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <i className="fas fa-check text-green-500 w-4"></i>
+                  <span>Price Movement</span>
+                </div>
+                <span className="text-green-600 font-medium">&gt; 5% gain</span>
               </div>
-              <div className="flex items-center">
-                <i className="fas fa-check text-green-500 w-4"></i>
-                <span>Volume &gt; 100K</span>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <i className="fas fa-check text-green-500 w-4"></i>
+                  <span>Volume Activity</span>
+                </div>
+                <span className="text-green-600 font-medium">Above average</span>
               </div>
-              <div className="flex items-center">
-                <i className="fas fa-check text-green-500 w-4"></i>
-                <span>Top gainers only</span>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <i className="fas fa-check text-green-500 w-4"></i>
+                  <span>Price Level</span>
+                </div>
+                <span className="text-green-600 font-medium">&gt; $1.00</span>
               </div>
             </div>
             <div className="flex space-x-2 mt-4">
