@@ -258,9 +258,10 @@ export class MemStorage implements IStorage {
   }
 
   async clearOldScanResults(): Promise<void> {
-    // Clear ALL scan results for fresh scan
-    this.scanResults.clear();
+    // Force rebuild the entire scan results map to eliminate any corruption
+    this.scanResults = new Map<number, ScanResult>();
     this.currentScanId = 1; // Reset ID counter
+    console.log('Scan results completely cleared and rebuilt');
   }
 }
 
