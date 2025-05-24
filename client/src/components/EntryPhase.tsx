@@ -10,7 +10,7 @@ import type { Trade, Stock } from '@shared/schema';
 
 export function EntryPhase() {
   const queryClient = useQueryClient();
-  const [accountSettings] = useState<AccountSettings>({
+  const [accountSettings, setAccountSettings] = useState<AccountSettings>({
     balance: 125486.32,
     defaultRiskPercent: 1,
   });
@@ -189,8 +189,11 @@ export function EntryPhase() {
                 id="accountBalance"
                 type="number"
                 value={accountSettings.balance}
-                readOnly
-                className="bg-gray-50 dark:bg-gray-700"
+                onChange={(e) => setAccountSettings(prev => ({ 
+                  ...prev, 
+                  balance: parseFloat(e.target.value) || 0 
+                }))}
+                placeholder="Enter your account balance"
               />
             </div>
             <div>
