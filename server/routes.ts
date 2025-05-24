@@ -209,7 +209,7 @@ else:
           if (yfinanceData && (yfinanceData as any).price) {
             const data = yfinanceData as any;
             // Only include stocks with positive momentum
-            if (data.change_percent > 3) {
+            if (data.change_percent > 1) {
               await storage.createScanResult({
                 symbol: symbol,
                 scanType: '1day',
