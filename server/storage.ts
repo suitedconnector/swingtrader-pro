@@ -258,18 +258,9 @@ export class MemStorage implements IStorage {
   }
 
   async clearOldScanResults(): Promise<void> {
-    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const entriesToDelete: number[] = [];
-    
-    this.scanResults.forEach((result, id) => {
-      if (result.createdAt && result.createdAt < oneDayAgo) {
-        entriesToDelete.push(id);
-      }
-    });
-    
-    entriesToDelete.forEach(id => {
-      this.scanResults.delete(id);
-    });
+    // Clear ALL scan results for fresh scan
+    this.scanResults.clear();
+    this.currentScanId = 1; // Reset ID counter
   }
 }
 

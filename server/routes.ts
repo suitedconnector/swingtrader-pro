@@ -198,9 +198,10 @@ export async function registerRoutes(app: Express) {
       for (const symbol of scanSymbols) {
         try {
           console.log(`Scanning ${symbol}...`);
-          // Get yfinance data using EXACT same method as verification endpoint
-          const yfinanceData = await new Promise((resolve, reject) => {
-            exec(`python3 -c "
+          // Get yfinance data with timeout to prevent hanging
+          const yfinanceData = await Promise.race([
+            new Promise((resolve, reject) => {
+              exec(`python3 -c "
 import yfinance as yf
 import json
 ticker = yf.Ticker('${symbol}')
@@ -220,17 +221,21 @@ if not hist.empty:
 else:
     print('{}')
 "`, (error, stdout, stderr) => {
-              if (error) {
-                reject(error);
-              } else {
-                try {
-                  resolve(JSON.parse(stdout.trim() || '{}'));
-                } catch (parseError) {
-                  reject(parseError);
+                if (error) {
+                  reject(error);
+                } else {
+                  try {
+                    resolve(JSON.parse(stdout.trim() || '{}'));
+                  } catch (parseError) {
+                    reject(parseError);
+                  }
                 }
-              }
-            });
-          });
+              });
+            }),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Timeout')), 3000)
+            )
+          ]);
           
           if (yfinanceData && (yfinanceData as any).price) {
             const data = yfinanceData as any;
