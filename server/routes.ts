@@ -166,9 +166,9 @@ export async function registerRoutes(app: Express) {
       // Clear old scan results first
       await storage.clearOldScanResults();
       
-      // Use Python to run yfinance scanning
-      const { spawn } = require('child_process');
-      const pythonProcess = spawn('python3', ['server/technical_analysis.py', 'AAPL']);
+      // Import child_process properly for TypeScript
+      const childProcess = await import('child_process');
+      const pythonProcess = childProcess.spawn('python3', ['server/technical_analysis.py', 'AAPL']);
       
       let output = '';
       pythonProcess.stdout.on('data', (data: any) => {
