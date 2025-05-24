@@ -158,72 +158,80 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  // Run scans with real Alpha Vantage data
+  // Run scans with yfinance data
   app.post("/api/run-scans", async (req, res) => {
     try {
-      const apiKey = process.env.ALPHA_VANTAGE_API_KEY;
-      
-      if (!apiKey) {
-        return res.status(500).json({ message: 'Alpha Vantage API key not configured' });
-      }
-
-      console.log('Running scans with Alpha Vantage API...');
+      console.log('Running scans with yfinance data...');
       
       // Clear old scan results first
       await storage.clearOldScanResults();
       
-      // Get top gainers from Alpha Vantage
-      const response = await fetch(`https://www.alphavantage.co/query?function=TOP_GAINERS_LOSERS&apikey=${apiKey}`);
-      const data = await response.json();
+      // Popular stocks to scan (mix of sectors, avoiding biotechs)
+      const scanSymbols = [
+        'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'NVDA', 'META', 'NFLX',
+        'JPM', 'BAC', 'WFC', 'GS', 'C', 'V', 'MA',
+        'JNJ', 'PFE', 'UNH', 'ABBV', 'MRK',
+        'XOM', 'CVX', 'COP', 'SLB',
+        'HD', 'WMT', 'PG', 'KO', 'PEP',
+        'DIS', 'ADBE', 'CRM', 'NOW', 'ORCL'
+      ];
       
-      if (data.top_gainers) {
-        console.log(`Found ${data.top_gainers.length} gainers from Alpha Vantage`);
-        
-        const processedSymbols = new Set(); // Track processed symbols to avoid duplicates
-        
-        for (const gainer of data.top_gainers.slice(0, 20)) {
-          const ticker = gainer.ticker;
-          const price = parseFloat(gainer.price);
-          const change = parseFloat(gainer.change_amount);
-          const changePercent = parseFloat(gainer.change_percentage.replace('%', ''));
-          const volume = parseInt(gainer.volume);
+      const { runYfinanceAnalysis } = require('./yfinance_analysis');
+      const processedResults = [];
+      
+      for (const symbol of scanSymbols) {
+        try {
+          const analysis = await runYfinanceAnalysis(symbol);
           
-          // Skip if already processed or if doesn't meet criteria
-          if (processedSymbols.has(ticker) || 
-              price <= 1 || 
-              changePercent <= 5 || 
-              volume <= 100000) {
-            continue;
+          if (analysis && !analysis.error) {
+            // Only include stocks with strong momentum and good score
+            const priceChange = analysis.marketData?.priceChange30d || 0;
+            const score = analysis.scorePercentage || 0;
+            
+            if (priceChange > 3 && score > 40 && analysis.currentPrice > 1) {
+              await storage.createScanResult({
+                symbol: symbol,
+                scanType: '1day',
+                price: analysis.currentPrice.toString(),
+                change: (priceChange / 30).toFixed(2), // Approximate daily change
+                changePercent: priceChange.toFixed(2),
+                volume: analysis.marketData?.volume || 0,
+                sector: getSectorForSymbol(symbol),
+                adr: priceChange > 10 ? priceChange.toString() : null,
+                dollarVolume: (analysis.currentPrice * (analysis.marketData?.volume || 0)).toString()
+              });
+              
+              processedResults.push(symbol);
+            }
           }
-          
-          processedSymbols.add(ticker);
-          
-          // Determine sector based on common patterns (simplified)
-          let sector = 'Technology';
-          if (ticker.includes('BANK') || ticker.includes('FIN')) sector = 'Financial Services';
-          else if (ticker.includes('BIO') || ticker.includes('PHARM')) sector = 'Healthcare';
-          else if (ticker.includes('ENERGY') || ticker.includes('OIL')) sector = 'Energy';
-          
-          await storage.createScanResult({
-            symbol: ticker,
-            scanType: '1day',
-            price: price.toString(),
-            change: change.toString(),
-            changePercent: changePercent.toString(),
-            volume: volume,
-            sector: sector,
-            adr: changePercent > 10 ? changePercent.toString() : null,
-            dollarVolume: (price * volume).toString()
-          });
+        } catch (error) {
+          console.log(`Skipping ${symbol}: ${error.message}`);
         }
       }
       
-      res.json({ message: "Scans executed successfully with Alpha Vantage data" });
+      console.log(`Processed ${processedResults.length} qualifying stocks: ${processedResults.join(', ')}`);
+      res.json({ message: `Scans completed with yfinance data. Found ${processedResults.length} qualifying stocks.` });
     } catch (error: any) {
       console.error('Scan error:', error);
       res.status(500).json({ message: "Failed to run scans: " + error.message });
     }
   });
+
+  // Helper function to get sector for known symbols
+  function getSectorForSymbol(symbol: string): string {
+    const sectorMap: { [key: string]: string } = {
+      'AAPL': 'Technology', 'MSFT': 'Technology', 'GOOGL': 'Technology', 'AMZN': 'Technology',
+      'TSLA': 'Technology', 'NVDA': 'Technology', 'META': 'Technology', 'NFLX': 'Technology',
+      'JPM': 'Financial Services', 'BAC': 'Financial Services', 'WFC': 'Financial Services',
+      'GS': 'Financial Services', 'C': 'Financial Services', 'V': 'Financial Services', 'MA': 'Financial Services',
+      'JNJ': 'Healthcare', 'PFE': 'Healthcare', 'UNH': 'Healthcare', 'ABBV': 'Healthcare', 'MRK': 'Healthcare',
+      'XOM': 'Energy', 'CVX': 'Energy', 'COP': 'Energy', 'SLB': 'Energy',
+      'HD': 'Consumer Discretionary', 'WMT': 'Consumer Staples', 'PG': 'Consumer Staples',
+      'KO': 'Consumer Staples', 'PEP': 'Consumer Staples', 'DIS': 'Communication Services'
+    };
+    
+    return sectorMap[symbol] || 'Technology';
+  }
 
   // Get stock price and breakout suggestion
   app.get('/api/stock-price/:symbol', async (req, res) => {
