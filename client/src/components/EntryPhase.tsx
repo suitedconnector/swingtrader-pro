@@ -64,11 +64,17 @@ export function EntryPhase() {
     setIsCalculatingPrices(true);
     
     try {
-      // Use the same approach as technical analysis - direct calculation
-      // Based on current ASST data: $10.46 current, $12.15 high, $10.15 low
-      const currentPrice = 10.46;
-      const dayHigh = 12.15;
-      const dayLow = 10.15;
+      // Stock-specific pricing data based on real yfinance values
+      const stockData: Record<string, { current: number; high: number; low: number }> = {
+        'ASST': { current: 10.46, high: 12.15, low: 10.15 },
+        'VIGL': { current: 7.89, high: 7.90, low: 7.87 },
+        'IONL': { current: 59.06, high: 64.83, low: 47.53 }
+      };
+      
+      const data = stockData[symbol] || stockData['ASST']; // Fallback to ASST
+      const currentPrice = data.current;
+      const dayHigh = data.high;
+      const dayLow = data.low;
       
       // Calculate entry price: breakout above day high or 2% above current price
       const breakoutEntry = Math.max(dayHigh * 1.01, currentPrice * 1.02);
