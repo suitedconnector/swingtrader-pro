@@ -166,8 +166,31 @@ export async function registerRoutes(app: Express) {
       // Clear old scan results first
       await storage.clearOldScanResults();
       
-      // Scan symbols across different sectors
-      const scanSymbols = ['AAPL', 'MSFT', 'GOOGL', 'JPM', 'UNH', 'XOM', 'HD', 'V'];
+      // Scan a broader selection of stocks across all sectors
+      const scanSymbols = [
+        // Technology
+        'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'TSLA', 'NVDA', 'CRM', 'ADBE', 'ORCL', 'NFLX', 'AMD', 'INTC', 'CSCO', 'IBM',
+        // Financial Services
+        'JPM', 'BAC', 'WFC', 'C', 'GS', 'MS', 'V', 'MA', 'AXP', 'BRK.B', 'USB', 'PNC', 'TFC', 'COF', 'SCHW',
+        // Healthcare
+        'UNH', 'JNJ', 'PFE', 'ABBV', 'MRK', 'TMO', 'ABT', 'DHR', 'BMY', 'AMGN', 'GILD', 'MDT', 'CVS', 'CI', 'HUM',
+        // Consumer Discretionary
+        'AMZN', 'TSLA', 'HD', 'MCD', 'NKE', 'SBUX', 'LOW', 'TJX', 'BKNG', 'MAR', 'GM', 'F', 'CCL', 'NCLH', 'RCL',
+        // Consumer Staples
+        'PG', 'KO', 'PEP', 'WMT', 'COST', 'CL', 'KMB', 'GIS', 'K', 'HSY', 'MO', 'PM', 'BTI', 'UL', 'MDLZ',
+        // Energy
+        'XOM', 'CVX', 'COP', 'EOG', 'SLB', 'PSX', 'VLO', 'MPC', 'OXY', 'BKR', 'HAL', 'DVN', 'FANG', 'APA', 'HES',
+        // Industrials
+        'BA', 'CAT', 'GE', 'MMM', 'HON', 'UPS', 'LMT', 'RTX', 'DE', 'EMR', 'ETN', 'PH', 'CMI', 'ITW', 'GD',
+        // Materials
+        'LIN', 'APD', 'ECL', 'SHW', 'DD', 'DOW', 'NEM', 'FCX', 'VMC', 'MLM', 'PPG', 'RPM', 'IFF', 'ALB', 'CF',
+        // Utilities
+        'NEE', 'DUK', 'SO', 'D', 'AEP', 'EXC', 'XEL', 'SRE', 'PEG', 'ED', 'FE', 'ETR', 'ES', 'AWK', 'WEC',
+        // Real Estate
+        'AMT', 'PLD', 'CCI', 'EQIX', 'PSA', 'WELL', 'SPG', 'O', 'SBAC', 'DLR', 'REG', 'BXP', 'ARE', 'UDR', 'EQR',
+        // Communication Services
+        'GOOGL', 'META', 'NFLX', 'DIS', 'CMCSA', 'VZ', 'T', 'CHTR', 'TMUS', 'NWSA', 'FOXA', 'IPG', 'OMC', 'TTWO', 'EA'
+      ];
       const processedResults = [];
       
       for (const symbol of scanSymbols) {
