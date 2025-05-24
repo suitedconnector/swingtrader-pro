@@ -105,6 +105,37 @@ export function ScanningPhase() {
       </h3>
       
       <div className="space-y-4">
+        {/* Morgan's Trading Criteria Status */}
+        <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 mb-6">
+          <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-3">Morgan's Swing Trading Criteria</h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+            <div className="flex items-center space-x-2">
+              <span className="text-green-600">✓</span>
+              <span>Minimum 3% positive momentum (30-day)</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <span className="text-green-600">✓</span>
+              <span>Exclude biotechnology stocks</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <span className="text-green-600">✓</span>
+              <span>Focus on established sectors</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <span className="text-green-600">✓</span>
+              <span>Strong volume confirmation</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <span className="text-green-600">✓</span>
+              <span>Real-time market data validation</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <span className="text-green-600">✓</span>
+              <span>Multi-sector diversification</span>
+            </div>
+          </div>
+        </div>
+
         {/* Market Overview */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
           <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
