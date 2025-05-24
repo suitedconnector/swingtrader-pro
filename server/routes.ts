@@ -130,14 +130,31 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  // Get all scan results
+  // Get all scan results (sorted by change percentage, highest first)
   app.get("/api/scan-results", async (req, res) => {
     try {
       const results = await storage.getScanResults();
-      res.json(results);
+      // Sort by change percentage (highest gainers first)
+      const sortedResults = results.sort((a, b) => {
+        const changeA = parseFloat(a.changePercent || '0');
+        const changeB = parseFloat(b.changePercent || '0');
+        return changeB - changeA;
+      });
+      res.json(sortedResults);
     } catch (error) {
       console.error('Error fetching scan results:', error);
       res.status(500).json({ message: "Failed to fetch scan results" });
+    }
+  });
+
+  // Reset/clear all scan results
+  app.delete("/api/scan-results", async (req, res) => {
+    try {
+      await storage.clearOldScanResults();
+      res.json({ message: "Scan results cleared successfully" });
+    } catch (error) {
+      console.error('Error clearing scan results:', error);
+      res.status(500).json({ message: "Failed to clear scan results" });
     }
   });
 
@@ -162,27 +179,42 @@ export async function registerRoutes(app: Express) {
       if (data.top_gainers) {
         console.log(`Found ${data.top_gainers.length} gainers from Alpha Vantage`);
         
-        for (const gainer of data.top_gainers.slice(0, 10)) {
+        const processedSymbols = new Set(); // Track processed symbols to avoid duplicates
+        
+        for (const gainer of data.top_gainers.slice(0, 20)) {
           const ticker = gainer.ticker;
           const price = parseFloat(gainer.price);
           const change = parseFloat(gainer.change_amount);
           const changePercent = parseFloat(gainer.change_percentage.replace('%', ''));
           const volume = parseInt(gainer.volume);
           
-          // Filter criteria: price > $1, change > 5%, volume > 100k
-          if (price > 1 && changePercent > 5 && volume > 100000) {
-            await storage.createScanResult({
-              symbol: ticker,
-              scanType: '1day',
-              price: price.toString(),
-              change: change.toString(),
-              changePercent: changePercent.toString(),
-              volume: volume,
-              sector: 'Technology',
-              adr: null,
-              dollarVolume: (price * volume).toString()
-            });
+          // Skip if already processed or if doesn't meet criteria
+          if (processedSymbols.has(ticker) || 
+              price <= 1 || 
+              changePercent <= 5 || 
+              volume <= 100000) {
+            continue;
           }
+          
+          processedSymbols.add(ticker);
+          
+          // Determine sector based on common patterns (simplified)
+          let sector = 'Technology';
+          if (ticker.includes('BANK') || ticker.includes('FIN')) sector = 'Financial Services';
+          else if (ticker.includes('BIO') || ticker.includes('PHARM')) sector = 'Healthcare';
+          else if (ticker.includes('ENERGY') || ticker.includes('OIL')) sector = 'Energy';
+          
+          await storage.createScanResult({
+            symbol: ticker,
+            scanType: '1day',
+            price: price.toString(),
+            change: change.toString(),
+            changePercent: changePercent.toString(),
+            volume: volume,
+            sector: sector,
+            adr: changePercent > 10 ? changePercent.toString() : null,
+            dollarVolume: (price * volume).toString()
+          });
         }
       }
       

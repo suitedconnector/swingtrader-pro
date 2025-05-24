@@ -51,6 +51,13 @@ export function ScanningPhase() {
     },
   });
 
+  const resetScansMutation = useMutation({
+    mutationFn: () => apiRequest('DELETE', '/api/scan-results'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/scan-results'] });
+    },
+  });
+
   const addToWatchlistMutation = useMutation({
     mutationFn: ({ watchlistId, symbol }: { watchlistId: number; symbol: string }) => {
       const watchlist = watchlists.find(w => w.id === watchlistId);
@@ -131,13 +138,23 @@ export function ScanningPhase() {
                 <span className="text-sm">One-Week Gainer Scan</span>
               </label>
             </div>
-            <Button 
-              onClick={handleRunScans} 
-              disabled={runScansMutation.isPending}
-              className="w-full mt-4"
-            >
-              {runScansMutation.isPending ? 'Running Scans...' : 'Run All Scans'}
-            </Button>
+            <div className="flex space-x-2 mt-4">
+              <Button 
+                onClick={handleRunScans} 
+                disabled={runScansMutation.isPending}
+                className="flex-1"
+              >
+                {runScansMutation.isPending ? 'Running Scans...' : 'Run All Scans'}
+              </Button>
+              <Button 
+                onClick={() => resetScansMutation.mutate()} 
+                disabled={resetScansMutation.isPending}
+                variant="outline"
+                className="flex-1"
+              >
+                {resetScansMutation.isPending ? 'Clearing...' : 'Reset Results'}
+              </Button>
+            </div>
           </div>
           
           <div className="space-y-3">
