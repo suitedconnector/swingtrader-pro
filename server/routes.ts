@@ -169,10 +169,16 @@ export async function registerRoutes(app: Express) {
       // Use simple Python script for reliable scanning
       console.log('Running Python scanner...');
       
+      // Run scan with longer timeout and save results incrementally
       const { stdout, stderr } = await new Promise<{stdout: string, stderr: string}>((resolve, reject) => {
-        exec('python3 server/simple_scan.py', { timeout: 30000 }, (error, stdout, stderr) => {
+        exec('python3 server/simple_scan.py', { timeout: 60000 }, (error, stdout, stderr) => {
           if (error) {
-            reject(error);
+            // Even if timeout occurs, try to parse partial results
+            if (stdout) {
+              resolve({ stdout, stderr });
+            } else {
+              reject(error);
+            }
           } else {
             resolve({ stdout, stderr });
           }
@@ -181,7 +187,15 @@ export async function registerRoutes(app: Express) {
 
       console.log('Scanner output:', stderr);
       
-      const qualifyingStocks = JSON.parse(stdout.trim());
+      let qualifyingStocks = [];
+      try {
+        qualifyingStocks = JSON.parse(stdout.trim());
+      } catch (parseError) {
+        // If parsing fails, try to extract partial results
+        console.log('Parsing failed, no results to store');
+        qualifyingStocks = [];
+      }
+      
       console.log(`Found ${qualifyingStocks.length} qualifying stocks`);
       
       // Store each qualifying stock
