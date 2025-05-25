@@ -38,8 +38,15 @@ def scan_stock(symbol):
         return None
 
 def main():
-    # Test with just 10 reliable stocks
-    symbols = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'TSLA', 'JPM', 'V', 'NVDA', 'HD']
+    # Scan 30 major stocks across all sectors for better coverage
+    symbols = [
+        # Technology Leaders
+        'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'TSLA', 'NVDA', 'CRM', 'ADBE', 'ORCL',
+        # Financial Services
+        'JPM', 'BAC', 'WFC', 'C', 'GS', 'V', 'MA', 'AXP', 'BRK-B', 'USB',
+        # Healthcare & Consumer
+        'UNH', 'JNJ', 'PFE', 'HD', 'MCD', 'NKE', 'COST', 'WMT', 'PG', 'KO'
+    ]
     
     qualifying = []
     
