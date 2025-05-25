@@ -265,4 +265,160 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+import { users, stocks, watchlists, trades, priceAlerts, scanResults, type User, type Stock, type Watchlist, type Trade, type PriceAlert, type ScanResult, type InsertUser, type InsertStock, type InsertWatchlist, type InsertTrade, type InsertPriceAlert, type InsertScanResult } from "@shared/schema";
+import { db } from "./db";
+import { eq } from "drizzle-orm";
+
+export class DatabaseStorage implements IStorage {
+  async getUser(id: number): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user || undefined;
+  }
+
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user || undefined;
+  }
+
+  async createUser(insertUser: InsertUser): Promise<User> {
+    const [user] = await db
+      .insert(users)
+      .values(insertUser)
+      .returning();
+    return user;
+  }
+
+  async getStocks(): Promise<Stock[]> {
+    return await db.select().from(stocks);
+  }
+
+  async getStock(symbol: string): Promise<Stock | undefined> {
+    const [stock] = await db.select().from(stocks).where(eq(stocks.symbol, symbol));
+    return stock || undefined;
+  }
+
+  async createStock(insertStock: InsertStock): Promise<Stock> {
+    const [stock] = await db
+      .insert(stocks)
+      .values(insertStock)
+      .returning();
+    return stock;
+  }
+
+  async updateStock(symbol: string, updates: Partial<InsertStock>): Promise<Stock | undefined> {
+    const [stock] = await db
+      .update(stocks)
+      .set(updates)
+      .where(eq(stocks.symbol, symbol))
+      .returning();
+    return stock || undefined;
+  }
+
+  async getWatchlists(): Promise<Watchlist[]> {
+    return await db.select().from(watchlists);
+  }
+
+  async getWatchlist(id: number): Promise<Watchlist | undefined> {
+    const [watchlist] = await db.select().from(watchlists).where(eq(watchlists.id, id));
+    return watchlist || undefined;
+  }
+
+  async createWatchlist(insertWatchlist: InsertWatchlist): Promise<Watchlist> {
+    const [watchlist] = await db
+      .insert(watchlists)
+      .values(insertWatchlist)
+      .returning();
+    return watchlist;
+  }
+
+  async updateWatchlist(id: number, updates: Partial<InsertWatchlist>): Promise<Watchlist | undefined> {
+    const [watchlist] = await db
+      .update(watchlists)
+      .set(updates)
+      .where(eq(watchlists.id, id))
+      .returning();
+    return watchlist || undefined;
+  }
+
+  async deleteWatchlist(id: number): Promise<boolean> {
+    const result = await db.delete(watchlists).where(eq(watchlists.id, id));
+    return result.rowCount > 0;
+  }
+
+  async getTrades(): Promise<Trade[]> {
+    return await db.select().from(trades);
+  }
+
+  async getActiveTrades(): Promise<Trade[]> {
+    return await db.select().from(trades).where(eq(trades.status, 'active'));
+  }
+
+  async getTrade(id: number): Promise<Trade | undefined> {
+    const [trade] = await db.select().from(trades).where(eq(trades.id, id));
+    return trade || undefined;
+  }
+
+  async createTrade(insertTrade: InsertTrade): Promise<Trade> {
+    const [trade] = await db
+      .insert(trades)
+      .values(insertTrade)
+      .returning();
+    return trade;
+  }
+
+  async updateTrade(id: number, updates: Partial<InsertTrade>): Promise<Trade | undefined> {
+    const [trade] = await db
+      .update(trades)
+      .set(updates)
+      .where(eq(trades.id, id))
+      .returning();
+    return trade || undefined;
+  }
+
+  async getPriceAlerts(): Promise<PriceAlert[]> {
+    return await db.select().from(priceAlerts);
+  }
+
+  async getActivePriceAlerts(): Promise<PriceAlert[]> {
+    return await db.select().from(priceAlerts).where(eq(priceAlerts.isActive, true));
+  }
+
+  async createPriceAlert(insertAlert: InsertPriceAlert): Promise<PriceAlert> {
+    const [alert] = await db
+      .insert(priceAlerts)
+      .values(insertAlert)
+      .returning();
+    return alert;
+  }
+
+  async updatePriceAlert(id: number, updates: Partial<InsertPriceAlert>): Promise<PriceAlert | undefined> {
+    const [alert] = await db
+      .update(priceAlerts)
+      .set(updates)
+      .where(eq(priceAlerts.id, id))
+      .returning();
+    return alert || undefined;
+  }
+
+  async getScanResults(): Promise<ScanResult[]> {
+    return await db.select().from(scanResults);
+  }
+
+  async getScanResultsByType(scanType: string): Promise<ScanResult[]> {
+    return await db.select().from(scanResults).where(eq(scanResults.scanType, scanType));
+  }
+
+  async createScanResult(insertResult: InsertScanResult): Promise<ScanResult> {
+    const [result] = await db
+      .insert(scanResults)
+      .values(insertResult)
+      .returning();
+    return result;
+  }
+
+  async clearOldScanResults(): Promise<void> {
+    await db.delete(scanResults);
+  }
+}
+
+export const storage = new DatabaseStorage();
