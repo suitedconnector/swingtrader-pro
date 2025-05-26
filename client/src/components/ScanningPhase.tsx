@@ -3,12 +3,16 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Progress } from '@/components/ui/progress';
 import { apiRequest } from '@/lib/queryClient';
 import type { ScanResult, Watchlist } from '@shared/schema';
 
 export function ScanningPhase() {
   const queryClient = useQueryClient();
   const [selectedSector, setSelectedSector] = useState<string>('all');
+  const [scanProgress, setScanProgress] = useState(0);
+  const [isScanning, setIsScanning] = useState(false);
+  const [currentStock, setCurrentStock] = useState<string>('');
   // Market data for context
   const { data: marketData } = useQuery<any>({
     queryKey: ['/api/market-data'],
@@ -39,7 +43,41 @@ export function ScanningPhase() {
   });
 
   const runScansMutation = useMutation({
-    mutationFn: () => apiRequest('POST', '/api/run-scans'),
+    mutationFn: async () => {
+      setIsScanning(true);
+      setScanProgress(0);
+      setCurrentStock('Initializing...');
+      
+      // Simulate progress updates during scanning
+      const progressInterval = setInterval(() => {
+        setScanProgress(prev => {
+          const newProgress = Math.min(prev + Math.random() * 10, 90);
+          if (newProgress < 30) setCurrentStock('Fetching market symbols...');
+          else if (newProgress < 60) setCurrentStock('Analyzing stocks...');
+          else if (newProgress < 90) setCurrentStock('Applying criteria...');
+          return newProgress;
+        });
+      }, 500);
+      
+      try {
+        const result = await apiRequest('POST', '/api/run-scans');
+        clearInterval(progressInterval);
+        setScanProgress(100);
+        setCurrentStock('Scan complete!');
+        setTimeout(() => {
+          setIsScanning(false);
+          setScanProgress(0);
+          setCurrentStock('');
+        }, 1000);
+        return result;
+      } catch (error) {
+        clearInterval(progressInterval);
+        setIsScanning(false);
+        setScanProgress(0);
+        setCurrentStock('');
+        throw error;
+      }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/scan-results'] });
     },
@@ -226,15 +264,15 @@ export function ScanningPhase() {
             <div className="flex space-x-2 mt-4">
               <Button 
                 onClick={handleRunScans} 
-                disabled={runScansMutation.isPending}
+                disabled={isScanning || runScansMutation.isPending}
                 className="flex-1 text-xs"
                 size="sm"
               >
-                {runScansMutation.isPending ? 'Scanning...' : 'Run Scan'}
+                {isScanning ? 'Scanning...' : 'Run Scan'}
               </Button>
               <Button 
                 onClick={() => resetScansMutation.mutate()} 
-                disabled={resetScansMutation.isPending}
+                disabled={resetScansMutation.isPending || isScanning}
                 variant="outline"
                 className="flex-1 text-xs"
                 size="sm"
@@ -242,6 +280,21 @@ export function ScanningPhase() {
                 {resetScansMutation.isPending ? 'Clearing...' : 'Reset'}
               </Button>
             </div>
+            
+            {/* Progress bar during scanning */}
+            {isScanning && (
+              <div className="mt-4 space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-600 dark:text-gray-400">{currentStock}</span>
+                  <span className="text-gray-600 dark:text-gray-400">{Math.round(scanProgress)}%</span>
+                </div>
+                <Progress value={scanProgress} className="h-2" />
+                <div className="flex items-center justify-center space-x-2 text-xs text-gray-500">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-trading-primary"></div>
+                  <span>Scanning market for opportunities...</span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
