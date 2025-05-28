@@ -97,7 +97,7 @@ Mobile Tip: Forward this email to your carrier's SMS gateway for text alerts.
       Messages: [
         {
           From: {
-            Email: 'tal@trezian.com',
+            Email: 'alerts@trezian.com',
             Name: 'Trezian Trading Alerts'
           },
           To: [
