@@ -1,11 +1,11 @@
-import { MailService } from '@sendgrid/mail';
+import Mailjet from 'node-mailjet';
 
-const isEmailEnabled = !!process.env.SENDGRID_API_KEY;
+const isEmailEnabled = !!(process.env.MAILJET_API_KEY && process.env.MAILJET_SECRET_KEY);
 
-const mailService = new MailService();
-if (isEmailEnabled) {
-  mailService.setApiKey(process.env.SENDGRID_API_KEY!);
-}
+const mailjet = isEmailEnabled ? Mailjet.apiConnect(
+  process.env.MAILJET_API_KEY!,
+  process.env.MAILJET_SECRET_KEY!
+) : null;
 
 interface PriceAlertEmailParams {
   to: string;
@@ -17,8 +17,8 @@ interface PriceAlertEmailParams {
 }
 
 export async function sendPriceAlertEmail(params: PriceAlertEmailParams): Promise<boolean> {
-  if (!isEmailEnabled) {
-    console.log('Email service disabled - SENDGRID_API_KEY not configured');
+  if (!isEmailEnabled || !mailjet) {
+    console.log('Email service disabled - MAILJET_API_KEY or MAILJET_SECRET_KEY not configured');
     return false;
   }
 
@@ -93,19 +93,32 @@ Time: ${new Date().toLocaleString()}
 Mobile Tip: Forward this email to your carrier's SMS gateway for text alerts.
     `;
 
-    await mailService.send({
-      to: to,
-      from: 'alerts@yourtradingapp.com', // You'll need to verify this domain with SendGrid
-      subject: subject,
-      text: textContent,
-      html: htmlContent,
+    const request = mailjet.post('send', { version: 'v3.1' }).request({
+      Messages: [
+        {
+          From: {
+            Email: 'alerts@yourtradingapp.com',
+            Name: 'Trading Dashboard'
+          },
+          To: [
+            {
+              Email: to,
+              Name: 'Trader'
+            }
+          ],
+          Subject: subject,
+          TextPart: textContent,
+          HTMLPart: htmlContent
+        }
+      ]
     });
 
+    await request;
     console.log(`Price alert email sent to ${to} for ${symbol} ${alertType}`);
     return true;
     
   } catch (error) {
-    console.error('SendGrid email error:', error);
+    console.error('Mailjet email error:', error);
     return false;
   }
 }
