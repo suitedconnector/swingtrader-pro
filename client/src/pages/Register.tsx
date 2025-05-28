@@ -33,10 +33,7 @@ export default function Register() {
 
   const registerMutation = useMutation({
     mutationFn: (data: RegistrationData) =>
-      apiRequest('/api/register', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }),
+      apiRequest('/api/register', 'POST', data),
     onSuccess: () => {
       toast({
         title: "Account Created!",

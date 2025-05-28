@@ -14,10 +14,8 @@ interface UserProfileData {
   id: number;
   username: string;
   email: string | null;
-  phone: string | null;
   emailAlerts: boolean;
-  smsAlerts: boolean;
-  accountBalance: string | null;
+  tradingBankroll: string | null;
 }
 
 export function UserProfile() {
@@ -27,10 +25,8 @@ export function UserProfile() {
 
   const [formData, setFormData] = useState({
     email: '',
-    phone: '',
     emailAlerts: true,
-    smsAlerts: true,
-    accountBalance: '',
+    tradingBankroll: '',
   });
 
   const { data: profile, isLoading } = useQuery({
