@@ -330,6 +330,52 @@ export async function registerRoutes(app: Express) {
     }
   });
 
+  // Zoho token exchange endpoint
+  app.post("/api/zoho/token", async (req, res) => {
+    try {
+      const { code } = req.body;
+      
+      if (!code) {
+        return res.status(400).json({ message: "Authorization code required" });
+      }
+
+      // Exchange code for tokens
+      const tokenResponse = await fetch('https://accounts.zoho.com/oauth/v2/token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          grant_type: 'authorization_code',
+          client_id: '1000.Q69KZUXSC9QV9A9QDAOZ59ZJ2ENCHW',
+          client_secret: 'c6bea20a04881fd255bd1dc797d08169a38dc1ea00',
+          redirect_uri: 'https://54abc171-cf5d-47af-9ec5-f1e591f22432-00-2ufeg7whmct9g.worf.replit.dev/api/zoho/callback',
+          code: code,
+        }),
+      });
+
+      const tokenData = await tokenResponse.json() as any;
+      
+      if (tokenData.refresh_token) {
+        console.log('=== ZOHO SETUP SUCCESS ===');
+        console.log('ZOHO_REFRESH_TOKEN=', tokenData.refresh_token);
+        console.log('========================');
+        
+        res.json({ 
+          success: true, 
+          message: "Zoho tokens received successfully!",
+          refreshToken: tokenData.refresh_token
+        });
+      } else {
+        console.error('Token exchange failed:', tokenData);
+        res.status(500).json({ message: "Failed to get refresh token", error: tokenData });
+      }
+    } catch (error: any) {
+      console.error('Zoho token error:', error);
+      res.status(500).json({ message: "Token exchange failed", error: error.message });
+    }
+  });
+
   // Zoho OAuth callback
   app.get("/api/zoho/callback", async (req, res) => {
     try {
