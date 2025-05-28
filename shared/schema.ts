@@ -76,6 +76,15 @@ export const insertUserSchema = createInsertSchema(users).pick({
   password: true,
 });
 
+export const registerUserSchema = createInsertSchema(users).pick({
+  username: true,
+  password: true,
+  email: true,
+  phone: true,
+  emailAlerts: true,
+  smsAlerts: true,
+});
+
 export const updateUserProfileSchema = createInsertSchema(users).pick({
   email: true,
   phone: true,

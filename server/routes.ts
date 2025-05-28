@@ -2,10 +2,40 @@ import { Express } from "express";
 import { createServer } from "http";
 import { exec, spawn } from "child_process";
 import { storage } from "./storage";
-import { updateUserProfileSchema } from "@shared/schema";
+import { updateUserProfileSchema, registerUserSchema } from "@shared/schema";
 import { sendTestAlert } from "./emailService";
 
 export async function registerRoutes(app: Express) {
+  // User registration with email preferences
+  app.post("/api/register", async (req, res) => {
+    try {
+      const userData = registerUserSchema.parse(req.body);
+      
+      // Check if username already exists
+      const existingUser = await storage.getUserByUsername(userData.username);
+      if (existingUser) {
+        return res.status(400).json({ message: "Username already exists" });
+      }
+      
+      const newUser = await storage.createUser({
+        username: userData.username,
+        password: userData.password, // In production, hash this password
+        email: userData.email,
+        phone: userData.phone,
+        emailAlerts: userData.emailAlerts,
+        smsAlerts: userData.smsAlerts,
+      });
+      
+      const { password, ...userProfile } = newUser;
+      res.status(201).json({ 
+        message: "Account created successfully",
+        user: userProfile 
+      });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Get user profile
   app.get("/api/profile/:userId", async (req, res) => {
     try {

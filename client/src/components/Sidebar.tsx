@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { Link } from 'wouter';
 import type { MarketData } from '@/lib/types';
 import type { Watchlist, PriceAlert, Trade } from '@shared/schema';
 
