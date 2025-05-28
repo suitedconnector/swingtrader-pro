@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'wouter';
 import { useThemeContext } from './ThemeProvider';
 import { PhaseSelector } from './PhaseSelector';
 import { ScanningPhase } from './ScanningPhase';
@@ -73,6 +74,12 @@ export function TradingDashboard() {
                 <span className="text-gray-600 dark:text-gray-400">Account:</span>
                 <span className="font-mono font-medium text-trading-success">$125,486.32</span>
               </div>
+              <Link href="/register">
+                <button className="px-4 py-2 text-sm font-medium text-white bg-trading-primary hover:bg-blue-600 rounded-lg transition-colors">
+                  <i className="fas fa-user-plus mr-2"></i>
+                  Register
+                </button>
+              </Link>
               <button 
                 onClick={toggleTheme}
                 className="p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
