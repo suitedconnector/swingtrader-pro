@@ -10,6 +10,7 @@ export const users = pgTable("users", {
   phone: text("phone"),
   emailAlerts: boolean("email_alerts").default(true),
   smsAlerts: boolean("sms_alerts").default(true),
+  accountBalance: decimal("account_balance", { precision: 12, scale: 2 }).default("0.00"),
 });
 
 export const stocks = pgTable("stocks", {
@@ -90,6 +91,7 @@ export const updateUserProfileSchema = createInsertSchema(users).pick({
   phone: true,
   emailAlerts: true,
   smsAlerts: true,
+  accountBalance: true,
 });
 
 export const insertStockSchema = createInsertSchema(stocks).omit({

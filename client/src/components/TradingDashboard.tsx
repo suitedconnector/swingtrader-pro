@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'wouter';
+import { useQuery } from '@tanstack/react-query';
 import { useThemeContext } from './ThemeProvider';
 import { PhaseSelector } from './PhaseSelector';
 import { ScanningPhase } from './ScanningPhase';

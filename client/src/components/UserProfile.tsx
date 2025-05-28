@@ -17,6 +17,7 @@ interface UserProfileData {
   phone: string | null;
   emailAlerts: boolean;
   smsAlerts: boolean;
+  accountBalance: string | null;
 }
 
 export function UserProfile() {
@@ -29,6 +30,7 @@ export function UserProfile() {
     phone: '',
     emailAlerts: true,
     smsAlerts: true,
+    accountBalance: '',
   });
 
   const { data: profile, isLoading } = useQuery({
@@ -186,6 +188,32 @@ export function UserProfile() {
                 </p>
                 {getCarrierInfo()}
               </div>
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* Account Settings */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-medium">Account Settings</h3>
+            
+            <div className="space-y-2">
+              <Label htmlFor="accountBalance" className="flex items-center gap-2">
+                <i className="fas fa-dollar-sign h-4 w-4"></i>
+                Account Balance
+              </Label>
+              <Input
+                id="accountBalance"
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder="0.00"
+                value={formData.accountBalance || ''}
+                onChange={(e) => setFormData({ ...formData, accountBalance: e.target.value })}
+              />
+              <p className="text-sm text-muted-foreground">
+                Your trading account balance for position sizing calculations
+              </p>
             </div>
           </div>
 
