@@ -4,6 +4,7 @@ import { exec, spawn } from "child_process";
 import { storage } from "./storage";
 import { updateUserProfileSchema, registerUserSchema } from "@shared/schema";
 import { sendTestAlert } from "./emailService";
+import { getZohoAuthUrl, sendZohoTest } from "./zohoService";
 
 export async function registerRoutes(app: Express) {
   // User registration with email preferences
