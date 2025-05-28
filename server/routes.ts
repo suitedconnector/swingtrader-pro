@@ -307,81 +307,43 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  // Technical analysis endpoint using accurate yfinance data
+  // Technical analysis endpoint using same data source as stock price API
   app.get('/api/technical-analysis/:symbol', async (req, res) => {
     try {
       const { symbol } = req.params;
       console.log(`Running technical analysis for ${symbol}`);
       
-      // Get accurate data from yfinance
-      const marketData = await new Promise<any>((resolve, reject) => {
-        exec(`python3 -c "
-import yfinance as yf
-import json
-import sys
-try:
-    ticker = yf.Ticker('${symbol}')
-    hist = ticker.history(period='5d')
-    
-    if len(hist) == 0:
-        print('No data available', file=sys.stderr)
-        sys.exit(1)
-    
-    current_price = float(hist['Close'].iloc[-1])
-    day_high = float(hist['High'].iloc[-1])
-    day_low = float(hist['Low'].iloc[-1])
-    open_price = float(hist['Open'].iloc[-1])
-    volume = int(hist['Volume'].iloc[-1])
-    
-    # Calculate price change from previous close
-    if len(hist) > 1:
-        prev_close = float(hist['Close'].iloc[-2])
-        change = current_price - prev_close
-        change_percent = (change / prev_close) * 100
-    else:
-        change = current_price - open_price
-        change_percent = (change / open_price) * 100
-    
-    result = {
-        'currentPrice': round(current_price, 2),
-        'dayHigh': round(day_high, 2),
-        'dayLow': round(day_low, 2),
-        'openPrice': round(open_price, 2),
-        'volume': volume,
-        'change': round(change, 2),
-        'changePercent': round(change_percent, 2)
-    }
-    
-    print(json.dumps(result))
-except Exception as e:
-    print(f'Error: {e}', file=sys.stderr)
-    sys.exit(1)
-"`, (error, stdout, stderr) => {
-          if (error) {
-            console.error('yfinance analysis error:', stderr);
-            reject(new Error('Failed to get market data'));
-          } else {
-            try {
-              resolve(JSON.parse(stdout));
-            } catch (parseError) {
-              reject(new Error('Failed to parse market data'));
-            }
-          }
-        });
-      });
+      // Use exact same data source as working stock price endpoint
+      const apiKey = process.env.ALPHA_VANTAGE_API_KEY;
+      if (!apiKey) {
+        return res.status(500).json({ message: 'API key not configured' });
+      }
 
-      const currentPrice = marketData.currentPrice;
-      const dayHigh = marketData.dayHigh;
-      const dayLow = marketData.dayLow;
-      const changePercent = marketData.changePercent;
-      const volume = marketData.volume;
+      const response = await fetch(`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${symbol.toUpperCase()}&apikey=${apiKey}`);
+      const data = await response.json();
       
-      // Calculate technical metrics from accurate yfinance data
+      if (!data['Global Quote'] || !data['Global Quote']['05. price']) {
+        return res.status(404).json({ message: 'Stock data not found' });
+      }
+
+      const currentPrice = parseFloat(data['Global Quote']['05. price']);
+      const dayHigh = parseFloat(data['Global Quote']['03. high']) || currentPrice;
+      const dayLow = parseFloat(data['Global Quote']['04. low']) || currentPrice;
+      const volume = parseInt(data['Global Quote']['06. volume']) || 1000000;
+      const change = parseFloat(data['Global Quote']['09. change']) || 0;
+      const changePercent = parseFloat(data['Global Quote']['10. change percent'].replace('%', '')) || 0;
+      
+      // Calculate breakout levels same as stock price endpoint
+      const rangeBreakout = dayHigh * 1.02;
+      const percentBreakout = currentPrice * 1.03;
+      const suggestedBreakout = Math.max(rangeBreakout, percentBreakout);
+      
+      // Calculate technical metrics
       const priceRange = dayHigh - dayLow;
       const pricePosition = priceRange > 0 ? (currentPrice - dayLow) / priceRange : 0.5;
       const volatility = (priceRange / currentPrice) * 100;
       
-      // Technical scoring based on authentic data
+      // Technical scoring based on authentic Alpha Vantage data
       let score = 50;
       if (pricePosition > 0.7) score += 20;
       if (pricePosition > 0.5) score += 10;
@@ -424,7 +386,7 @@ except Exception as e:
           ma_20_above_50: { value: pricePosition > 0.7, label: 'Near Day High' },
           long_term_trend: { value: changePercent > -5, label: 'Reasonable Daily Performance' }
         },
-        analysis: `${symbol.toUpperCase()} analysis from yfinance: $${currentPrice.toFixed(2)} (${changePercent > 0 ? '+' : ''}${changePercent.toFixed(1)}%). Score: ${score}%`
+        analysis: `${symbol.toUpperCase()} analysis using same data as stock price endpoint: $${currentPrice.toFixed(2)} (${changePercent > 0 ? '+' : ''}${changePercent.toFixed(1)}%). Score: ${score}%`
       };
       
       console.log(`Technical analysis completed for ${symbol}: ${score}% score`);
