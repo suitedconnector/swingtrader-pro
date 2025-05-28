@@ -24,6 +24,13 @@ const TRADING_PHASES: TradingPhase[] = [
 export function TradingDashboard() {
   const { theme, toggleTheme } = useThemeContext();
   const [currentPhase, setCurrentPhase] = useState(1);
+  const userId = 1; // For now, using default user ID
+  
+  // Fetch user profile to get account balance
+  const { data: userProfile } = useQuery({
+    queryKey: ['/api/profile', userId],
+    queryFn: () => fetch(`/api/profile/${userId}`).then(res => res.json()),
+  });
 
   const renderPhaseContent = () => {
     switch (currentPhase) {
@@ -73,7 +80,9 @@ export function TradingDashboard() {
             <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-2 text-sm">
                 <span className="text-gray-600 dark:text-gray-400">Account:</span>
-                <span className="font-mono font-medium text-trading-success">$125,486.32</span>
+                <span className="font-mono font-medium text-trading-success">
+                  ${userProfile?.accountBalance || '0.00'}
+                </span>
               </div>
               <Link href="/register">
                 <button className="px-4 py-2 text-sm font-medium text-white bg-trading-primary hover:bg-blue-600 rounded-lg transition-colors">
