@@ -6,6 +6,10 @@ export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
+  email: text("email"),
+  phone: text("phone"),
+  emailAlerts: boolean("email_alerts").default(true),
+  smsAlerts: boolean("sms_alerts").default(true),
 });
 
 export const stocks = pgTable("stocks", {
@@ -70,6 +74,13 @@ export const scanResults = pgTable("scan_results", {
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
+});
+
+export const updateUserProfileSchema = createInsertSchema(users).pick({
+  email: true,
+  phone: true,
+  emailAlerts: true,
+  smsAlerts: true,
 });
 
 export const insertStockSchema = createInsertSchema(stocks).omit({

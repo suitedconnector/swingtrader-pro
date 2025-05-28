@@ -10,6 +10,7 @@ export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  updateUserProfile(id: number, updates: { email?: string; phone?: string; emailAlerts?: boolean; smsAlerts?: boolean }): Promise<User | undefined>;
 
   // Stock methods
   getStocks(): Promise<Stock[]>;
@@ -95,9 +96,18 @@ export class MemStorage implements IStorage {
 
   async createUser(insertUser: InsertUser): Promise<User> {
     const id = this.currentUserId++;
-    const user: User = { ...insertUser, id };
+    const user: User = { ...insertUser, id, email: null, phone: null, emailAlerts: true, smsAlerts: true };
     this.users.set(id, user);
     return user;
+  }
+
+  async updateUserProfile(id: number, updates: { email?: string; phone?: string; emailAlerts?: boolean; smsAlerts?: boolean }): Promise<User | undefined> {
+    const user = this.users.get(id);
+    if (!user) return undefined;
+    
+    const updated: User = { ...user, ...updates };
+    this.users.set(id, updated);
+    return updated;
   }
 
   // Stock methods
@@ -286,6 +296,15 @@ export class DatabaseStorage implements IStorage {
       .values(insertUser)
       .returning();
     return user;
+  }
+
+  async updateUserProfile(id: number, updates: { email?: string; phone?: string; emailAlerts?: boolean; smsAlerts?: boolean }): Promise<User | undefined> {
+    const [user] = await db
+      .update(users)
+      .set(updates)
+      .where(eq(users.id, id))
+      .returning();
+    return user || undefined;
   }
 
   async getStocks(): Promise<Stock[]> {
