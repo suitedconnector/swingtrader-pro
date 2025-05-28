@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Link } from 'wouter';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { apiRequest } from '@/lib/queryClient';
+import { useToast } from '@/hooks/use-toast';
 import { useThemeContext } from './ThemeProvider';
 import { PhaseSelector } from './PhaseSelector';
 import { ScanningPhase } from './ScanningPhase';
@@ -25,6 +27,25 @@ export function TradingDashboard() {
   const { theme, toggleTheme } = useThemeContext();
   const [currentPhase, setCurrentPhase] = useState(1);
   const userId = 1; // For now, using default user ID
+  const { toast } = useToast();
+
+  // Test email mutation
+  const testEmailMutation = useMutation({
+    mutationFn: () => apiRequest('POST', '/api/test-email', { email: 'tfrei320@gmail.com' }),
+    onSuccess: () => {
+      toast({
+        title: "Test Email Sent!",
+        description: "Check your inbox at tfrei320@gmail.com for a sample trading alert.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Email Test Failed",
+        description: error.message || "Failed to send test email",
+        variant: "destructive",
+      });
+    },
+  });
   
   // Fetch user profile to get account balance
   const { data: userProfile } = useQuery({
@@ -84,6 +105,13 @@ export function TradingDashboard() {
                   ${userProfile?.tradingBankroll || '0.00'}
                 </span>
               </div>
+              <button 
+                onClick={() => testEmailMutation.mutate()}
+                disabled={testEmailMutation.isPending}
+                className="bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white px-3 py-2 rounded-lg font-medium transition-colors text-sm"
+              >
+                {testEmailMutation.isPending ? 'Sending...' : 'Test Email'}
+              </button>
               <Link href="/register">
                 <button className="px-4 py-2 text-sm font-medium text-white bg-trading-primary hover:bg-blue-600 rounded-lg transition-colors">
                   <i className="fas fa-user-plus mr-2"></i>
