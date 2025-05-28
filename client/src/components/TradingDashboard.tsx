@@ -79,9 +79,9 @@ export function TradingDashboard() {
             </div>
             <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-2 text-sm">
-                <span className="text-gray-600 dark:text-gray-400">Account:</span>
+                <span className="text-gray-600 dark:text-gray-400">Trading Bankroll:</span>
                 <span className="font-mono font-medium text-trading-success">
-                  ${userProfile?.accountBalance || '0.00'}
+                  ${userProfile?.tradingBankroll || '0.00'}
                 </span>
               </div>
               <Link href="/register">

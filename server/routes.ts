@@ -21,9 +21,8 @@ export async function registerRoutes(app: Express) {
         username: userData.username,
         password: userData.password, // In production, hash this password
         email: userData.email,
-        phone: userData.phone,
         emailAlerts: userData.emailAlerts,
-        smsAlerts: userData.smsAlerts,
+        tradingBankroll: userData.tradingBankroll,
       });
       
       const { password, ...userProfile } = newUser;

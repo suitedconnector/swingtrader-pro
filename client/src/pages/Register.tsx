@@ -15,9 +15,8 @@ interface RegistrationData {
   username: string;
   password: string;
   email: string;
-  phone: string;
   emailAlerts: boolean;
-  smsAlerts: boolean;
+  tradingBankroll: string;
 }
 
 export default function Register() {
@@ -28,9 +27,8 @@ export default function Register() {
     username: '',
     password: '',
     email: '',
-    phone: '',
     emailAlerts: true,
-    smsAlerts: false,
+    tradingBankroll: '',
   });
 
   const registerMutation = useMutation({
@@ -156,23 +154,22 @@ export default function Register() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="phone" className="flex items-center gap-2">
-                  <Mail className="h-4 w-4" />
-                  SMS Gateway Email (Optional)
+                <Label htmlFor="tradingBankroll" className="flex items-center gap-2">
+                  <i className="fas fa-dollar-sign h-4 w-4"></i>
+                  Trading Bankroll
                 </Label>
                 <Input
-                  id="phone"
-                  type="text"
-                  placeholder="5551234567@vtext.com"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  id="tradingBankroll"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="Enter your starting balance (e.g., 10000.00)"
+                  value={formData.tradingBankroll}
+                  onChange={(e) => setFormData({ ...formData, tradingBankroll: e.target.value })}
                 />
-                <div className="space-y-2">
-                  <p className="text-sm text-muted-foreground">
-                    Enter your phone number with carrier gateway for SMS alerts
-                  </p>
-                  {getCarrierInfo()}
-                </div>
+                <p className="text-sm text-muted-foreground">
+                  Your initial trading account balance for position sizing calculations
+                </p>
               </div>
             </div>
 
@@ -199,21 +196,7 @@ export default function Register() {
                   />
                 </div>
 
-                <div className="flex items-center justify-between">
-                  <div className="space-y-1">
-                    <Label htmlFor="sms-alerts" className="text-sm font-medium">
-                      SMS Alerts
-                    </Label>
-                    <p className="text-sm text-muted-foreground">
-                      Forward alerts to your phone via email gateway
-                    </p>
-                  </div>
-                  <Switch
-                    id="sms-alerts"
-                    checked={formData.smsAlerts}
-                    onCheckedChange={(checked) => setFormData({ ...formData, smsAlerts: checked })}
-                  />
-                </div>
+
               </div>
             </div>
 
