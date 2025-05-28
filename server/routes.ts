@@ -3,6 +3,7 @@ import { createServer } from "http";
 import { exec, spawn } from "child_process";
 import { storage } from "./storage";
 import { updateUserProfileSchema } from "@shared/schema";
+import { sendTestAlert } from "./emailService";
 
 export async function registerRoutes(app: Express) {
   // Get user profile
@@ -34,6 +35,25 @@ export async function registerRoutes(app: Express) {
       
       const { password, ...profile } = user;
       res.json(profile);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Test email alert
+  app.post("/api/test-email-alert", async (req, res) => {
+    try {
+      const { email } = req.body;
+      if (!email) {
+        return res.status(400).json({ message: "Email address required" });
+      }
+      
+      const success = await sendTestAlert(email);
+      if (success) {
+        res.json({ message: "Test alert sent successfully" });
+      } else {
+        res.status(500).json({ message: "Failed to send test alert" });
+      }
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }

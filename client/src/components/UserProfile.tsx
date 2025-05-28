@@ -55,12 +55,33 @@ export function UserProfile() {
         title: "Profile Updated",
         description: "Your notification preferences have been saved successfully.",
       });
-      queryClient.invalidateQueries(['/api/profile', userId]);
+      queryClient.invalidateQueries({ queryKey: ['/api/profile', userId] });
     },
     onError: () => {
       toast({
         title: "Update Failed",
         description: "There was an error updating your profile. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const testEmailMutation = useMutation({
+    mutationFn: (email: string) =>
+      apiRequest('/api/test-email-alert', {
+        method: 'POST',
+        body: JSON.stringify({ email }),
+      }),
+    onSuccess: () => {
+      toast({
+        title: "Test Alert Sent!",
+        description: "Check your email for a sample price breakout alert.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Test Failed",
+        description: "Couldn't send test alert. Make sure you have a valid email address.",
         variant: "destructive",
       });
     },
@@ -205,7 +226,7 @@ export function UserProfile() {
             </p>
           </div>
 
-          <div className="pt-4">
+          <div className="pt-4 space-y-3">
             <Button
               type="submit"
               className="w-full"
@@ -213,6 +234,18 @@ export function UserProfile() {
             >
               {updateProfileMutation.isPending ? "Saving..." : "Save Profile"}
             </Button>
+            
+            {formData.email && (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                disabled={testEmailMutation.isPending}
+                onClick={() => testEmailMutation.mutate(formData.email)}
+              >
+                {testEmailMutation.isPending ? "Sending..." : "📧 Send Test Alert"}
+              </Button>
+            )}
           </div>
         </form>
       </CardContent>
