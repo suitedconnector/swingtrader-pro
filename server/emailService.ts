@@ -1,11 +1,11 @@
 import { MailService } from '@sendgrid/mail';
 
-if (!process.env.SENDGRID_API_KEY) {
-  throw new Error("SENDGRID_API_KEY environment variable must be set");
-}
+const isEmailEnabled = !!process.env.SENDGRID_API_KEY;
 
 const mailService = new MailService();
-mailService.setApiKey(process.env.SENDGRID_API_KEY);
+if (isEmailEnabled) {
+  mailService.setApiKey(process.env.SENDGRID_API_KEY!);
+}
 
 interface PriceAlertEmailParams {
   to: string;
@@ -17,6 +17,11 @@ interface PriceAlertEmailParams {
 }
 
 export async function sendPriceAlertEmail(params: PriceAlertEmailParams): Promise<boolean> {
+  if (!isEmailEnabled) {
+    console.log('Email service disabled - SENDGRID_API_KEY not configured');
+    return false;
+  }
+
   try {
     const { to, symbol, currentPrice, targetPrice, alertType, changePercent } = params;
     
