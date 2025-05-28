@@ -2,8 +2,43 @@ import { Express } from "express";
 import { createServer } from "http";
 import { exec, spawn } from "child_process";
 import { storage } from "./storage";
+import { updateUserProfileSchema } from "@shared/schema";
 
 export async function registerRoutes(app: Express) {
+  // Get user profile
+  app.get("/api/profile/:userId", async (req, res) => {
+    try {
+      const userId = parseInt(req.params.userId);
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      const { password, ...profile } = user;
+      res.json(profile);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Update user profile
+  app.patch("/api/profile/:userId", async (req, res) => {
+    try {
+      const userId = parseInt(req.params.userId);
+      const updates = updateUserProfileSchema.parse(req.body);
+      
+      const user = await storage.updateUserProfile(userId, updates);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      const { password, ...profile } = user;
+      res.json(profile);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Get all watchlists
   app.get("/api/watchlists", async (req, res) => {
     try {

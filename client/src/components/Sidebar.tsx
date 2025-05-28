@@ -170,6 +170,23 @@ export function Sidebar() {
           </div>
         )}
       </div>
+
+      {/* User Profile */}
+      <div className="bg-white dark:bg-dark-surface rounded-xl shadow-sm border border-gray-200 dark:border-dark-border p-4">
+        <h3 className="text-lg font-semibold mb-3 flex items-center">
+          <i className="fas fa-user text-trading-primary mr-2"></i>
+          Profile
+        </h3>
+        <div className="space-y-2">
+          <button className="w-full text-left text-sm p-2 rounded hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+            <i className="fas fa-envelope mr-2 text-gray-500"></i>
+            Email & SMS Settings
+          </button>
+          <div className="text-xs text-gray-500 dark:text-gray-400 px-2">
+            Configure alerts for price breakouts
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
