@@ -283,7 +283,14 @@ export async function registerRoutes(app: Express) {
       const { symbol } = req.params;
       console.log(`Running technical analysis for ${symbol}`);
       
-      // Get authentic market data using Python yfinance
+      // Use the same reliable data source as stock price API
+      const priceResponse = await fetch(`http://localhost:5000/api/stock-price/${symbol}`);
+      if (!priceResponse.ok) {
+        throw new Error('Failed to get stock price data');
+      }
+      const priceData = await priceResponse.json();
+
+      // Get additional technical data using the same reliable source
       const marketData = await new Promise<any>((resolve, reject) => {
         exec(`python3 -c "
 import yfinance as yf
@@ -292,13 +299,13 @@ import sys
 try:
     ticker = yf.Ticker('${symbol}')
     hist = ticker.history(period='60d')
-    info = ticker.info
     
     if len(hist) < 20:
         print('Insufficient data', file=sys.stderr)
         sys.exit(1)
     
-    current_price = float(hist['Close'].iloc[-1])
+    # Use the verified current price from our reliable API
+    current_price = ${priceData.currentPrice}
     sma_10 = float(hist['Close'].tail(10).mean())
     sma_20 = float(hist['Close'].tail(20).mean())
     sma_50 = float(hist['Close'].tail(50).mean()) if len(hist) >= 50 else sma_20
@@ -306,16 +313,18 @@ try:
     volume_avg = float(hist['Volume'].tail(20).mean())
     current_volume = float(hist['Volume'].iloc[-1])
     
-    # Calculate price change over 30 days
+    # Calculate price change based on verified current price
     price_30d_ago = float(hist['Close'].iloc[-30]) if len(hist) >= 30 else float(hist['Close'].iloc[0])
     price_change_30d = ((current_price - price_30d_ago) / price_30d_ago) * 100
     
-    # Support and resistance levels based on recent highs/lows
-    recent_high = float(hist['High'].tail(20).max())
-    recent_low = float(hist['Low'].tail(20).min())
+    # Support and resistance based on verified current price and day range
+    day_high = ${priceData.dayHigh}
+    day_low = ${priceData.dayLow}
+    recent_high = max(day_high, float(hist['High'].tail(20).max()))
+    recent_low = min(day_low, float(hist['Low'].tail(20).min()))
     
     result = {
-        'currentPrice': round(current_price, 2),
+        'currentPrice': current_price,
         'sma10': round(sma_10, 2),
         'sma20': round(sma_20, 2),
         'sma50': round(sma_50, 2),
@@ -324,8 +333,8 @@ try:
         'priceChange30d': round(price_change_30d, 1),
         'support': round(recent_low * 0.98, 2),
         'resistance': round(recent_high * 1.02, 2),
-        'dayHigh': round(float(hist['High'].iloc[-1]), 2),
-        'dayLow': round(float(hist['Low'].iloc[-1]), 2)
+        'dayHigh': day_high,
+        'dayLow': day_low
     }
     
     print(json.dumps(result))
