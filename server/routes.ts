@@ -307,6 +307,28 @@ export async function registerRoutes(app: Express) {
     }
   });
 
+  // Test email endpoint
+  app.post("/api/test-email", async (req, res) => {
+    try {
+      const { email } = req.body;
+      
+      if (!email) {
+        return res.status(400).json({ message: "Email address required" });
+      }
+      
+      const success = await sendTestAlert(email);
+      
+      if (success) {
+        res.json({ message: "Test email sent successfully!" });
+      } else {
+        res.status(500).json({ message: "Failed to send test email" });
+      }
+    } catch (error: any) {
+      console.error('Test email error:', error);
+      res.status(500).json({ message: "Email test failed: " + error.message });
+    }
+  });
+
   // Helper function to get sector for known symbols
   function getSectorForSymbol(symbol: string): string {
     const sectorMap: { [key: string]: string } = {
