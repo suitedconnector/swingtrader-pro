@@ -307,42 +307,87 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  // Technical analysis endpoint using reliable Finnhub data
+  // Technical analysis endpoint using accurate yfinance data
   app.get('/api/technical-analysis/:symbol', async (req, res) => {
     try {
       const { symbol } = req.params;
       console.log(`Running technical analysis for ${symbol}`);
       
-      const finnhubToken = 'd0r5m2hr01qn4tjgkk70';
-      
-      // Get current quote from Finnhub
-      const quoteResponse = await fetch(`https://finnhub.io/api/v1/quote?symbol=${symbol.toUpperCase()}&token=${finnhubToken}`);
-      const quoteData = await quoteResponse.json();
-      
-      if (!quoteData.c) {
-        return res.status(404).json({ message: 'Stock data not found' });
-      }
+      // Get accurate data from yfinance
+      const marketData = await new Promise<any>((resolve, reject) => {
+        exec(`python3 -c "
+import yfinance as yf
+import json
+import sys
+try:
+    ticker = yf.Ticker('${symbol}')
+    hist = ticker.history(period='5d')
+    
+    if len(hist) == 0:
+        print('No data available', file=sys.stderr)
+        sys.exit(1)
+    
+    current_price = float(hist['Close'].iloc[-1])
+    day_high = float(hist['High'].iloc[-1])
+    day_low = float(hist['Low'].iloc[-1])
+    open_price = float(hist['Open'].iloc[-1])
+    volume = int(hist['Volume'].iloc[-1])
+    
+    # Calculate price change from previous close
+    if len(hist) > 1:
+        prev_close = float(hist['Close'].iloc[-2])
+        change = current_price - prev_close
+        change_percent = (change / prev_close) * 100
+    else:
+        change = current_price - open_price
+        change_percent = (change / open_price) * 100
+    
+    result = {
+        'currentPrice': round(current_price, 2),
+        'dayHigh': round(day_high, 2),
+        'dayLow': round(day_low, 2),
+        'openPrice': round(open_price, 2),
+        'volume': volume,
+        'change': round(change, 2),
+        'changePercent': round(change_percent, 2)
+    }
+    
+    print(json.dumps(result))
+except Exception as e:
+    print(f'Error: {e}', file=sys.stderr)
+    sys.exit(1)
+"`, (error, stdout, stderr) => {
+          if (error) {
+            console.error('yfinance analysis error:', stderr);
+            reject(new Error('Failed to get market data'));
+          } else {
+            try {
+              resolve(JSON.parse(stdout));
+            } catch (parseError) {
+              reject(new Error('Failed to parse market data'));
+            }
+          }
+        });
+      });
 
-      const currentPrice = quoteData.c;
-      const dayHigh = quoteData.h;
-      const dayLow = quoteData.l;
-      const openPrice = quoteData.o;
-      const previousClose = quoteData.pc;
-      const change = currentPrice - previousClose;
-      const changePercent = (change / previousClose) * 100;
+      const currentPrice = marketData.currentPrice;
+      const dayHigh = marketData.dayHigh;
+      const dayLow = marketData.dayLow;
+      const changePercent = marketData.changePercent;
+      const volume = marketData.volume;
       
-      // Calculate technical metrics from reliable Finnhub data
+      // Calculate technical metrics from accurate yfinance data
       const priceRange = dayHigh - dayLow;
       const pricePosition = priceRange > 0 ? (currentPrice - dayLow) / priceRange : 0.5;
       const volatility = (priceRange / currentPrice) * 100;
       
-      // Technical scoring based on authentic Finnhub data
+      // Technical scoring based on authentic data
       let score = 50;
       if (pricePosition > 0.7) score += 20;
       if (pricePosition > 0.5) score += 10;
       if (changePercent > 0) score += 15;
       if (volatility > 1 && volatility < 10) score += 10;
-      if (currentPrice > openPrice) score += 5;
+      if (volume > 500000) score += 5;
       
       score = Math.min(95, Math.max(25, score));
       
@@ -355,7 +400,7 @@ export async function registerRoutes(app: Express) {
           sma20: pricePosition > 0.5 ? 'bullish' : 'bearish',
           sma50: pricePosition > 0.3 ? 'bullish' : 'bearish',
           sma200: changePercent > -5 ? 'bullish' : 'bearish',
-          volume: 'normal',
+          volume: volume > 1000000 ? 'high' : 'normal',
           trend: changePercent > 2 ? 'uptrend' : changePercent > -2 ? 'sideways' : 'downtrend'
         },
         keyLevels: {
@@ -365,11 +410,11 @@ export async function registerRoutes(app: Express) {
         currentPrice: currentPrice.toFixed(2),
         marketData: {
           priceChange30d: changePercent.toFixed(1),
-          volume: 1000000
+          volume: volume
         },
         criteria: {
           ma_alignment: { value: pricePosition > 0.5, label: 'Price Above Range Midpoint' },
-          volume_trend: { value: true, label: 'Data Available' },
+          volume_trend: { value: volume > 500000, label: 'Volume Above 500K' },
           price_trend: { value: changePercent > 0, label: 'Positive Daily Change' },
           support_level: { value: currentPrice > dayLow, label: 'Above Day Low' },
           momentum: { value: changePercent > -2, label: 'Stable Momentum' },
@@ -379,7 +424,7 @@ export async function registerRoutes(app: Express) {
           ma_20_above_50: { value: pricePosition > 0.7, label: 'Near Day High' },
           long_term_trend: { value: changePercent > -5, label: 'Reasonable Daily Performance' }
         },
-        analysis: `${symbol.toUpperCase()} analysis from Finnhub: $${currentPrice.toFixed(2)} (${changePercent > 0 ? '+' : ''}${changePercent.toFixed(1)}%). Score: ${score}%`
+        analysis: `${symbol.toUpperCase()} analysis from yfinance: $${currentPrice.toFixed(2)} (${changePercent > 0 ? '+' : ''}${changePercent.toFixed(1)}%). Score: ${score}%`
       };
       
       console.log(`Technical analysis completed for ${symbol}: ${score}% score`);
