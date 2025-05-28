@@ -10,7 +10,7 @@ export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
-  updateUserProfile(id: number, updates: { email?: string; phone?: string; emailAlerts?: boolean; smsAlerts?: boolean }): Promise<User | undefined>;
+  updateUserProfile(id: number, updates: { email?: string; emailAlerts?: boolean; tradingBankroll?: string }): Promise<User | undefined>;
 
   // Stock methods
   getStocks(): Promise<Stock[]>;
@@ -96,7 +96,7 @@ export class MemStorage implements IStorage {
 
   async createUser(insertUser: InsertUser): Promise<User> {
     const id = this.currentUserId++;
-    const user: User = { ...insertUser, id, email: null, phone: null, emailAlerts: true, smsAlerts: true, accountBalance: "0.00" };
+    const user: User = { ...insertUser, id, email: null, emailAlerts: true, tradingBankroll: "0.00" };
     this.users.set(id, user);
     return user;
   }

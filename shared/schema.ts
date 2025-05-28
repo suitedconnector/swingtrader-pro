@@ -7,10 +7,8 @@ export const users = pgTable("users", {
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
   email: text("email"),
-  phone: text("phone"),
   emailAlerts: boolean("email_alerts").default(true),
-  smsAlerts: boolean("sms_alerts").default(true),
-  accountBalance: decimal("account_balance", { precision: 12, scale: 2 }).default("0.00"),
+  tradingBankroll: decimal("trading_bankroll", { precision: 12, scale: 2 }).default("0.00"),
 });
 
 export const stocks = pgTable("stocks", {
@@ -81,17 +79,14 @@ export const registerUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
   email: true,
-  phone: true,
   emailAlerts: true,
-  smsAlerts: true,
+  tradingBankroll: true,
 });
 
 export const updateUserProfileSchema = createInsertSchema(users).pick({
   email: true,
-  phone: true,
   emailAlerts: true,
-  smsAlerts: true,
-  accountBalance: true,
+  tradingBankroll: true,
 });
 
 export const insertStockSchema = createInsertSchema(stocks).omit({
