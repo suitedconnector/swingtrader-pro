@@ -1,6 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { startTradeMonitoring } from "./tradeMonitor";
 
 const app = express();
 app.use(express.json());
@@ -55,6 +56,9 @@ app.use((req, res, next) => {
   } else {
     serveStatic(app);
   }
+
+  // Start trade monitoring system
+  startTradeMonitoring();
 
   // ALWAYS serve the app on port 5000
   // this serves both the API and the client.

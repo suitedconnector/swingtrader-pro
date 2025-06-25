@@ -58,22 +58,23 @@ export function EntryPhase() {
   const allSymbols = [...stockSymbols, ...watchlistSymbols];
   const availableStocks = Array.from(new Set(allSymbols)).filter(symbol => symbol && symbol.length > 0);
 
-  // Function to automatically calculate entry and stop loss prices using yfinance
+  // Function to automatically calculate entry and stop loss prices using real market data
   const calculateOptimalPrices = async (symbol: string) => {
     setIsCalculatingPrices(true);
     
     try {
-      // Stock-specific pricing data based on real yfinance values
-      const stockData: Record<string, { current: number; high: number; low: number }> = {
-        'ASST': { current: 10.46, high: 12.15, low: 10.15 },
-        'VIGL': { current: 7.89, high: 7.90, low: 7.87 },
-        'IONL': { current: 59.06, high: 64.83, low: 47.53 }
-      };
+      // Fetch real market data for the symbol
+      const response = await fetch(`/api/stock-price/${symbol}`);
+      const priceData = await response.json();
       
-      const data = stockData[symbol] || stockData['ASST']; // Fallback to ASST
-      const currentPrice = data.current;
-      const dayHigh = data.high;
-      const dayLow = data.low;
+      if (!response.ok || !priceData.currentPrice) {
+        throw new Error(`Unable to fetch price data for ${symbol}`);
+      }
+      
+      const currentPrice = parseFloat(priceData.currentPrice);
+      // Use current price as both high and low if no intraday data available
+      const dayHigh = priceData.dayHigh ? parseFloat(priceData.dayHigh) : currentPrice * 1.02;
+      const dayLow = priceData.dayLow ? parseFloat(priceData.dayLow) : currentPrice * 0.98;
       
       // Calculate entry price: breakout above day high or 2% above current price
       const breakoutEntry = Math.max(dayHigh * 1.01, currentPrice * 1.02);
