@@ -21,6 +21,10 @@ export function Sidebar() {
     queryKey: ['/api/trades', { active: true }],
   });
 
+  const { data: allTrades = [] } = useQuery<Trade[]>({
+    queryKey: ['/api/trades'],
+  });
+
   const focusList = watchlists.find(w => w.type === 'focus');
   const flaggedList = watchlists.find(w => w.type === 'flagged');
 
@@ -29,7 +33,10 @@ export function Sidebar() {
     return total + 0; // Placeholder
   }, 0);
 
-  const winRate = 75; // Placeholder - would be calculated from historical data
+  // Calculate actual win rate from completed trades
+  const completedTrades = allTrades.filter(trade => trade.status === 'closed' && trade.pnl !== null);
+  const winningTrades = completedTrades.filter(trade => Number(trade.pnl) > 0);
+  const winRate = completedTrades.length > 0 ? (winningTrades.length / completedTrades.length) * 100 : 0;
   const totalRiskUsed = activeTrades.reduce((total, trade) => total + Number(trade.riskAmount), 0);
   const accountBalance = 125486.32; // Would come from user settings
   const riskPercentUsed = (totalRiskUsed / accountBalance) * 100;
@@ -132,7 +139,9 @@ export function Sidebar() {
           </div>
           <div className="flex justify-between">
             <span className="text-sm text-gray-600 dark:text-gray-400">Win Rate:</span>
-            <span className="text-sm font-mono">{winRate}%</span>
+            <span className="text-sm font-mono">
+              {completedTrades.length > 0 ? `${winRate.toFixed(1)}%` : 'N/A'}
+            </span>
           </div>
           <div className="flex justify-between">
             <span className="text-sm text-gray-600 dark:text-gray-400">Active Trades:</span>
