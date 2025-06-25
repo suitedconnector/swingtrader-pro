@@ -230,15 +230,8 @@ export function ScanningPhase() {
           </div>
 
           <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
-            <h4 className="font-medium text-gray-900 dark:text-white mb-2">Scan Status</h4>
+            <h4 className="font-medium text-gray-900 dark:text-white mb-2">Scan Filters Active</h4>
             <div className="space-y-1 text-xs text-gray-600 dark:text-gray-400">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <i className="fas fa-check text-green-500 w-4"></i>
-                  <span>Moving Averages</span>
-                </div>
-                <span className="text-green-600 font-medium">Above 20-day</span>
-              </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
                   <i className="fas fa-check text-green-500 w-4"></i>
@@ -249,16 +242,30 @@ export function ScanningPhase() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
                   <i className="fas fa-check text-green-500 w-4"></i>
-                  <span>Volume Activity</span>
+                  <span>Volume</span>
                 </div>
-                <span className="text-green-600 font-medium">Above average</span>
+                <span className="text-green-600 font-medium">&gt; 500K shares</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <i className="fas fa-check text-green-500 w-4"></i>
+                  <span>Dollar Volume</span>
+                </div>
+                <span className="text-green-600 font-medium">&gt; $5M</span>
               </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
                   <i className="fas fa-check text-green-500 w-4"></i>
                   <span>Price Level</span>
                 </div>
-                <span className="text-green-600 font-medium">&gt; $1.00</span>
+                <span className="text-green-600 font-medium">&gt; $10.00</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <i className="fas fa-times text-red-500 w-4"></i>
+                  <span>Biotech Stocks</span>
+                </div>
+                <span className="text-red-600 font-medium">Excluded</span>
               </div>
             </div>
             <div className="flex space-x-2 mt-4">

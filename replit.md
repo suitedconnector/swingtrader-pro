@@ -16,6 +16,7 @@ Preferred communication style: Simple, everyday language.
 - **User Profile Integration**: Account balance and risk calculations now pull from actual user profile data instead of hardcoded values
 - **Market Data Display Enhanced**: Sidebar shows "Loading..." instead of fallback prices, with proper color coding based on actual market movement
 - **Phase 1 Scanning Qualifiers Complete**: Implemented all 5 swing trading criteria - price movement >5%, volume >500K, dollar volume >$5M, exclude biotech, price >$10
+- **Phase 1 UI Accuracy Fixed**: Corrected scan status display to show actual filtering criteria instead of incorrect moving averages and $1.00 price threshold
 - Automatic Trade Management System Fully Operational: System monitors positions every 30 seconds and auto-closes trades at profit targets or stop losses with email notifications
 - Real Market Data Integration Complete: Fixed hardcoded price bug - each stock uses authentic market pricing for entry/exit calculations
 - Email Alert System Fully Operational: Trading alerts successfully deliver from alerts@trezian.com
