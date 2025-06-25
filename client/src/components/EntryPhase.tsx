@@ -19,6 +19,7 @@ export function EntryPhase() {
     symbol: '',
     entryPrice: '',
     stopLoss: '',
+    profitTarget: '',
     riskPercent: accountSettings.defaultRiskPercent.toString(),
   });
 
@@ -27,6 +28,7 @@ export function EntryPhase() {
     currentPrice: number;
     suggestedEntry: number;
     suggestedStopLoss: number;
+    suggestedProfitTarget: number;
     reasoning: string;
   } | null>(null);
 
@@ -80,13 +82,19 @@ export function EntryPhase() {
       // Calculate stop loss: 8% below entry (conservative swing trading rule)
       const suggestedStopLoss = suggestedEntry * 0.92;
       
+      // Calculate profit target: 2:1 risk/reward ratio
+      const riskPerShare = suggestedEntry - suggestedStopLoss;
+      const suggestedProfitTarget = suggestedEntry + (riskPerShare * 2);
+      
       let reasoning = `Entry: $${suggestedEntry.toFixed(2)} (breakout above $${currentPrice.toFixed(2)} current price). `;
-      reasoning += `Stop: $${suggestedStopLoss.toFixed(2)} (8% below entry for swing trading).`;
+      reasoning += `Stop: $${suggestedStopLoss.toFixed(2)} (8% below entry). `;
+      reasoning += `Target: $${suggestedProfitTarget.toFixed(2)} (2:1 risk/reward).`;
       
       const calculations = {
         currentPrice,
         suggestedEntry,
         suggestedStopLoss,
+        suggestedProfitTarget,
         reasoning
       };
       
@@ -96,7 +104,8 @@ export function EntryPhase() {
       setPositionForm(prev => ({
         ...prev,
         entryPrice: suggestedEntry.toFixed(2),
-        stopLoss: suggestedStopLoss.toFixed(2)
+        stopLoss: suggestedStopLoss.toFixed(2),
+        profitTarget: suggestedProfitTarget.toFixed(2)
       }));
       
     } catch (error) {
@@ -111,6 +120,7 @@ export function EntryPhase() {
       symbol: string;
       entryPrice: string;
       stopLoss: string;
+      profitTarget: string;
       shares: number;
       riskAmount: string;
     }) =>
@@ -118,6 +128,7 @@ export function EntryPhase() {
         symbol: tradeData.symbol.toUpperCase(),
         entryPrice: tradeData.entryPrice,
         stopLoss: tradeData.stopLoss,
+        profitTarget: tradeData.profitTarget,
         shares: tradeData.shares,
         riskAmount: tradeData.riskAmount,
         status: 'active',
@@ -128,6 +139,7 @@ export function EntryPhase() {
         symbol: '',
         entryPrice: '',
         stopLoss: '',
+        profitTarget: '',
         riskPercent: accountSettings.defaultRiskPercent.toString(),
       });
     },
@@ -160,6 +172,7 @@ export function EntryPhase() {
         symbol: positionForm.symbol,
         entryPrice: positionForm.entryPrice,
         stopLoss: positionForm.stopLoss,
+        profitTarget: positionForm.profitTarget,
         shares: calculation.numShares,
         riskAmount: calculation.riskAmount.toFixed(2),
       });
@@ -237,6 +250,7 @@ export function EntryPhase() {
                   <div>Current Price: <span className="font-mono">${priceCalculations.currentPrice.toFixed(2)}</span></div>
                   <div>Suggested Entry: <span className="font-mono text-green-600">${priceCalculations.suggestedEntry.toFixed(2)}</span></div>
                   <div>Suggested Stop: <span className="font-mono text-red-600">${priceCalculations.suggestedStopLoss.toFixed(2)}</span></div>
+                  <div>Profit Target: <span className="font-mono text-blue-600">${priceCalculations.suggestedProfitTarget.toFixed(2)}</span></div>
                   <p className="text-xs text-blue-700 dark:text-blue-300 mt-2">{priceCalculations.reasoning}</p>
                 </div>
               </div>
@@ -264,6 +278,18 @@ export function EntryPhase() {
                 onChange={(e) => setPositionForm(prev => ({ ...prev, stopLoss: e.target.value }))}
                 placeholder="Auto-calculated or manual entry"
                 className={priceCalculations ? 'bg-red-50 dark:bg-red-900/20' : ''}
+              />
+            </div>
+            <div>
+              <Label htmlFor="profitTarget">Profit Target ($)</Label>
+              <Input
+                id="profitTarget"
+                type="number"
+                step="0.01"
+                value={positionForm.profitTarget}
+                onChange={(e) => setPositionForm(prev => ({ ...prev, profitTarget: e.target.value }))}
+                placeholder="Auto-calculated or manual entry"
+                className={priceCalculations ? 'bg-blue-50 dark:bg-blue-900/20' : ''}
               />
             </div>
           </form>

@@ -38,9 +38,11 @@ export const trades = pgTable("trades", {
   symbol: text("symbol").notNull(),
   entryPrice: decimal("entry_price", { precision: 10, scale: 2 }).notNull(),
   stopLoss: decimal("stop_loss", { precision: 10, scale: 2 }).notNull(),
+  profitTarget: decimal("profit_target", { precision: 10, scale: 2 }),
   shares: integer("shares").notNull(),
   riskAmount: decimal("risk_amount", { precision: 10, scale: 2 }).notNull(),
   status: text("status").notNull().default("active"), // 'active', 'closed'
+  exitReason: text("exit_reason"), // 'stop_loss', 'profit_target', 'manual'
   entryDate: timestamp("entry_date").defaultNow(),
   exitDate: timestamp("exit_date"),
   exitPrice: decimal("exit_price", { precision: 10, scale: 2 }),
