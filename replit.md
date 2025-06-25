@@ -15,6 +15,7 @@ Preferred communication style: Simple, everyday language.
 - **Manual Trade Exit with Live Pricing**: Exit positions now fetch real-time market prices and calculate accurate P&L at time of closure
 - **User Profile Integration**: Account balance and risk calculations now pull from actual user profile data instead of hardcoded values
 - **Market Data Display Enhanced**: Sidebar shows "Loading..." instead of fallback prices, with proper color coding based on actual market movement
+- **Phase 1 Scanning Bug Fixed**: Corrected minimum gain threshold from 3% to 5% - stocks like DUK (3.7%) now properly excluded from scan results
 - Automatic Trade Management System Fully Operational: System monitors positions every 30 seconds and auto-closes trades at profit targets or stop losses with email notifications
 - Real Market Data Integration Complete: Fixed hardcoded price bug - each stock uses authentic market pricing for entry/exit calculations
 - Email Alert System Fully Operational: Trading alerts successfully deliver from alerts@trezian.com

@@ -27,8 +27,8 @@ def scan_stock(symbol):
             'sector': sector
         }
         
-        # Only return if meets Morgan's 3% momentum criteria
-        if change_pct > 3:
+        # Only return if meets Morgan's 5% momentum criteria
+        if change_pct > 5:
             return result
         else:
             return None
