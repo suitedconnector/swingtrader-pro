@@ -8,6 +8,17 @@ This is a comprehensive trading dashboard application built with React, Express,
 
 Preferred communication style: Simple, everyday language.
 
+## Recent Changes
+
+- **Email Alert System Fully Operational** (June 25, 2025): Resolved Mailjet API permissions and sender validation issues. Trading alerts now successfully deliver to users from alerts@trezian.com
+- Fixed registration system by correcting API request format, enabling successful user account creation with configurable trading bankrolls  
+- Implemented Mailjet email notification system with professional HTML templates for trading alerts
+- Added "Test Email" functionality to trading dashboard for system verification
+- Configured alerts@trezian.com as validated sender with proper domain authentication
+- Stock scanning system operational with 48 qualifying stocks identified in latest scan
+- Technical analysis scoring system working (NVDA: 95%, GOOGL: 80%, TSLA: 65%)
+- Price alert creation and management system functional
+
 ## System Architecture
 
 ### Frontend Architecture
