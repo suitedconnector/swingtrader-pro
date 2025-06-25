@@ -1,224 +1,372 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Checkbox } from '@/components/ui/checkbox';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import TradingViewChart from './TradingViewChart';
-import { useTheme } from '@/hooks/useTheme';
-import type { Watchlist } from '@shared/schema';
+import { useToast } from '@/hooks/use-toast';
+import { apiRequest } from '@/lib/queryClient';
+
+interface SetupAnalysis {
+  symbol: string;
+  sector: string;
+  setup_score: number;
+  setup_quality: string;
+  adr_percent: number;
+  moving_averages: {
+    current_price: number;
+    sma_10: number;
+    sma_20: number;
+    sma_50: number;
+    sma_200: number;
+    perfect_alignment: boolean;
+    price_above_10: boolean;
+    price_above_20: boolean;
+    price_above_50: boolean;
+    price_above_200: boolean;
+    sma_10_inclining: boolean;
+    sma_20_inclining: boolean;
+    sma_50_inclining: boolean;
+    sma_200_inclining: boolean;
+  };
+  range_structure: {
+    higher_lows: boolean;
+    range_tightening: boolean;
+    range_high: number;
+    range_low: number;
+    range_size_percent: number;
+    current_position_in_range: number;
+  };
+  volume_pattern: {
+    avg_volume_50d: number;
+    recent_avg_volume: number;
+    volume_drying_up: boolean;
+    thin_volume_days: number;
+    volume_ratio: number;
+  };
+  breakout_levels: {
+    previous_day_high: number;
+    range_high: number;
+    resistance_level: number;
+    distance_to_prev_high_percent: number;
+    distance_to_range_high_percent: number;
+    near_breakout: boolean;
+  };
+}
 
 export function ChartSetupPhase() {
-  const { theme } = useTheme();
-  const [selectedStock, setSelectedStock] = useState<string>('');
-  const [analysisData, setAnalysisData] = useState<any>(null);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [selectedSymbol, setSelectedSymbol] = useState('');
+  const [analysisSymbol, setAnalysisSymbol] = useState('');
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
-  const { data: watchlists = [] } = useQuery<Watchlist[]>({
+  // Get watchlist stocks for analysis
+  const { data: watchlists } = useQuery({
     queryKey: ['/api/watchlists'],
   });
 
-  // Get all unique symbols from both Focus and Flagged lists
-  const allStocks = watchlists.reduce((stocks: string[], watchlist) => {
-    return [...stocks, ...watchlist.symbols];
-  }, []);
+  const focusListStocks = watchlists?.find(w => w.type === 'focus')?.stocks || [];
 
-  const runTechnicalAnalysis = async (symbol: string) => {
-    if (!symbol) return;
-    
-    setIsAnalyzing(true);
-    try {
-      const response = await fetch(`/api/technical-analysis/${symbol}`);
-      const responseText = await response.text();
-      
-      console.log('Raw response:', responseText.slice(0, 500)); // Debug log
-      console.log('Response status:', response.status);
-      console.log('Response ok:', response.ok);
-      
-      let data;
-      try {
-        data = JSON.parse(responseText);
-      } catch (parseError) {
-        console.error('JSON parse error:', parseError);
-        console.error('Response was:', responseText.slice(0, 200));
-        setAnalysisData(null);
-        return;
-      }
-      
-      if (response.ok && data) {
-        console.log('Setting analysis data:', data);
-        setAnalysisData(data);
-      } else {
-        console.error('Analysis failed:', data?.message || 'Invalid response');
-        setAnalysisData(null);
-      }
-    } catch (error) {
-      console.error('Error running analysis:', error);
-      setAnalysisData(null);
-    } finally {
-      setIsAnalyzing(false);
+  // Setup analysis query
+  const { data: setupAnalysis, isLoading: analysisLoading, error: analysisError } = useQuery<SetupAnalysis>({
+    queryKey: ['/api/setup-analysis', analysisSymbol],
+    enabled: !!analysisSymbol,
+  });
+
+  const handleAnalyzeStock = () => {
+    if (selectedSymbol.trim()) {
+      setAnalysisSymbol(selectedSymbol.toUpperCase());
     }
   };
 
-  const handleStockChange = (symbol: string) => {
-    setSelectedStock(symbol);
-    setAnalysisData(null);
-    if (symbol) {
-      runTechnicalAnalysis(symbol);
+  const addToWatchlistMutation = useMutation({
+    mutationFn: async (symbol: string) => {
+      const focusList = watchlists?.find(w => w.type === 'focus');
+      if (!focusList) throw new Error('Focus list not found');
+      
+      const updatedStocks = [...(focusList.stocks || []), symbol];
+      return apiRequest(`/api/watchlists/${focusList.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ stocks: updatedStocks }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/watchlists'] });
+      toast({ title: 'Stock added to Focus List' });
+    },
+  });
+
+  const getQualityColor = (quality: string) => {
+    switch (quality) {
+      case 'Excellent': return 'bg-green-500';
+      case 'Good': return 'bg-blue-500';
+      case 'Fair': return 'bg-yellow-500';
+      default: return 'bg-red-500';
     }
   };
 
-  const getScoreColor = (percentage: number) => {
-    if (percentage >= 80) return 'text-green-600 dark:text-green-400';
-    if (percentage >= 60) return 'text-yellow-600 dark:text-yellow-400';
-    return 'text-red-600 dark:text-red-400';
-  };
-
-  const getScoreBackground = (percentage: number) => {
-    return 'bg-gray-50 dark:bg-gray-800';
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+    }).format(value);
   };
 
   return (
     <div className="bg-white dark:bg-dark-surface rounded-xl shadow-sm border border-gray-200 dark:border-dark-border p-6">
       <h3 className="text-lg font-semibold mb-4 flex items-center">
-        <i className="fas fa-chart-bar text-trading-primary mr-2"></i>
-        Phase 2: Daily Chart Setup Analysis
+        <i className="fas fa-chart-line text-trading-primary mr-2"></i>
+        Phase 2: Chart Setup Analysis
       </h3>
-      
-      {/* Stock Selection */}
-      <div className="flex items-center space-x-4 mb-6">
-        <h4 className="font-medium text-gray-900 dark:text-white">Select Stock to Analyze:</h4>
-        <Select value={selectedStock} onValueChange={handleStockChange}>
-          <SelectTrigger className="w-48">
-            <SelectValue placeholder="Choose a stock" />
-          </SelectTrigger>
-          <SelectContent>
-            {allStocks.map((symbol) => (
-              <SelectItem key={symbol} value={symbol}>
-                {symbol}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {isAnalyzing && (
-          <div className="flex items-center space-x-2">
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-trading-primary"></div>
-            <span className="text-sm text-gray-600 dark:text-gray-400">Analyzing...</span>
-          </div>
-        )}
-      </div>
 
-
-
-      {isAnalyzing && (
-        <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 mb-6">
-          <div className="flex items-center space-x-2">
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-trading-primary"></div>
-            <span className="text-sm">Running technical analysis...</span>
-          </div>
+      {/* Analysis Input */}
+      <div className="mb-6">
+        <div className="flex space-x-2 mb-4">
+          <Input
+            placeholder="Enter symbol (e.g., AAPL)"
+            value={selectedSymbol}
+            onChange={(e) => setSelectedSymbol(e.target.value.toUpperCase())}
+            className="flex-1"
+          />
+          <Button 
+            onClick={handleAnalyzeStock}
+            disabled={!selectedSymbol.trim() || analysisLoading}
+          >
+            {analysisLoading ? 'Analyzing...' : 'Analyze Setup'}
+          </Button>
         </div>
-      )}
 
-      {/* Chart Section */}
-      <div className="mb-6 space-y-4">
-        {selectedStock && (
-          <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-            <TradingViewChart
-              symbol={selectedStock}
-              height={500}
-              theme={theme === 'dark' ? 'dark' : 'light'}
-              interval="D"
-              allow_symbol_change={false}
-              enable_publishing={false}
-            />
+        {/* Quick Select from Focus List */}
+        {focusListStocks.length > 0 && (
+          <div className="mb-4">
+            <label className="text-sm font-medium mb-2 block">Or select from Focus List:</label>
+            <Select value={selectedSymbol} onValueChange={setSelectedSymbol}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select from Focus List" />
+              </SelectTrigger>
+              <SelectContent>
+                {focusListStocks.map((symbol) => (
+                  <SelectItem key={symbol} value={symbol}>
+                    {symbol}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         )}
       </div>
-
-
 
       {/* Analysis Results */}
-      {analysisData && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-          {/* Overall Score */}
-          <div className={`rounded-lg p-4 ${getScoreBackground(analysisData.scorePercentage || 0)}`}>
-            <h4 className="font-medium text-gray-900 dark:text-white mb-2">Technical Score</h4>
-            <div className={`text-3xl font-bold ${getScoreColor(analysisData.scorePercentage || 0)}`}>
-              {analysisData.scorePercentage || 0}%
-            </div>
-            <div className="text-sm text-gray-600 dark:text-gray-400">
-              {analysisData.technicalScore}/{analysisData.maxScore} criteria met
-            </div>
-          </div>
-
-          {/* Key Metrics */}
-          <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
-            <h4 className="font-medium text-gray-900 dark:text-white mb-2">Key Metrics</h4>
-            <div className="space-y-1 text-sm">
-              <div>Current Price: <span className="font-mono">${analysisData.currentPrice}</span></div>
-              <div>30-day Move: <span className="font-mono">{analysisData.marketData.priceChange30d}%</span></div>
-              <div>Volume: <span className="font-mono">{(analysisData.marketData.volume/1000000).toFixed(1)}M</span></div>
-            </div>
-          </div>
-
-          {/* Moving Averages */}
-          <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
-            <h4 className="font-medium text-gray-900 dark:text-white mb-2">Moving Averages</h4>
-            <div className="space-y-1 text-sm">
-              <div>10 SMA: <span className={`font-mono ${analysisData.technicalIndicators?.sma10 === 'bullish' ? 'text-green-600' : 'text-red-600'}`}>{analysisData.technicalIndicators?.sma10 || 'N/A'}</span></div>
-              <div>20 SMA: <span className={`font-mono ${analysisData.technicalIndicators?.sma20 === 'bullish' ? 'text-green-600' : 'text-red-600'}`}>{analysisData.technicalIndicators?.sma20 || 'N/A'}</span></div>
-              <div>50 SMA: <span className={`font-mono ${analysisData.technicalIndicators?.sma50 === 'bullish' ? 'text-green-600' : 'text-red-600'}`}>{analysisData.technicalIndicators?.sma50 || 'N/A'}</span></div>
-              <div>200 SMA: <span className={`font-mono ${analysisData.technicalIndicators?.sma200 === 'bullish' ? 'text-green-600' : 'text-red-600'}`}>{analysisData.technicalIndicators?.sma200 || 'N/A'}</span></div>
-            </div>
-          </div>
+      {analysisLoading && (
+        <div className="text-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-trading-primary mx-auto"></div>
+          <p className="text-gray-600 dark:text-gray-400 mt-2">Analyzing chart setup...</p>
         </div>
       )}
 
-      {/* Detailed Criteria Analysis */}
-      {analysisData && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-          <div className="space-y-4">
-            <h4 className="font-medium text-gray-900 dark:text-white">Technical Analysis Results</h4>
-            <div className="space-y-3">
-              {Object.entries(analysisData.criteria).slice(0, 5).map(([key, criterion]: [string, any]) => (
-                <div key={key} className="flex items-center space-x-3">
-                  <Checkbox checked={criterion.value} disabled />
-                  <div className="flex-1">
-                    <span className="text-sm">{criterion.label}</span>
-                    {criterion.weight > 1 && (
-                      <span className="ml-2 px-1.5 py-0.5 text-xs bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded">
-                        High Priority
-                      </span>
-                    )}
+      {analysisError && (
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-4">
+          <p className="text-red-800 dark:text-red-200">
+            Failed to analyze setup. Please try again.
+          </p>
+        </div>
+      )}
+
+      {setupAnalysis && (
+        <div className="space-y-6">
+          {/* Setup Overview */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                <span>{setupAnalysis.symbol} Setup Analysis</span>
+                <Badge className={getQualityColor(setupAnalysis.setup_quality)}>
+                  {setupAnalysis.setup_quality}
+                </Badge>
+              </CardTitle>
+              <CardDescription>
+                {setupAnalysis.sector} • ADR: {setupAnalysis.adr_percent}%
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="mb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium">Setup Score</span>
+                  <span className="text-sm font-bold">{setupAnalysis.setup_score}/100</span>
+                </div>
+                <Progress value={setupAnalysis.setup_score} className="h-3" />
+              </div>
+              
+              {setupAnalysis.setup_score >= 65 && (
+                <Button 
+                  onClick={() => addToWatchlistMutation.mutate(setupAnalysis.symbol)}
+                  disabled={addToWatchlistMutation.isPending}
+                  className="w-full"
+                >
+                  {addToWatchlistMutation.isPending ? 'Adding...' : 'Add to Focus List'}
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Moving Averages Analysis */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Moving Average Analysis</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                <div className="text-center">
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Current Price</div>
+                  <div className="font-bold">{formatCurrency(setupAnalysis.moving_averages.current_price)}</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-sm text-gray-600 dark:text-gray-400">10 SMA</div>
+                  <div className={`font-bold ${setupAnalysis.moving_averages.price_above_10 ? 'text-green-600' : 'text-red-600'}`}>
+                    {formatCurrency(setupAnalysis.moving_averages.sma_10)}
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
-          
-          <div className="space-y-4">
-            <h4 className="font-medium text-gray-900 dark:text-white">Moving Average Analysis</h4>
-            <div className="space-y-3">
-              {Object.entries(analysisData.criteria).slice(5).map(([key, criterion]: [string, any]) => (
-                <div key={key} className="flex items-center space-x-3">
-                  <Checkbox checked={criterion.value} disabled />
-                  <span className="text-sm">{criterion.label}</span>
+                <div className="text-center">
+                  <div className="text-sm text-gray-600 dark:text-gray-400">20 SMA</div>
+                  <div className={`font-bold ${setupAnalysis.moving_averages.price_above_20 ? 'text-green-600' : 'text-red-600'}`}>
+                    {formatCurrency(setupAnalysis.moving_averages.sma_20)}
+                  </div>
                 </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
+                <div className="text-center">
+                  <div className="text-sm text-gray-600 dark:text-gray-400">50 SMA</div>
+                  <div className={`font-bold ${setupAnalysis.moving_averages.price_above_50 ? 'text-green-600' : 'text-red-600'}`}>
+                    {formatCurrency(setupAnalysis.moving_averages.sma_50)}
+                  </div>
+                </div>
+              </div>
 
-      {!selectedStock && allStocks.length === 0 && (
-        <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-8 text-center">
-          <i className="fas fa-chart-candlestick text-4xl text-gray-400 mb-4"></i>
-          <p className="text-gray-600 dark:text-gray-400">Add stocks to your watchlists from Phase 1 to analyze them here</p>
-        </div>
-      )}
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center justify-between">
+                  <span>Perfect Alignment (10>20>50>200)</span>
+                  <span className={setupAnalysis.moving_averages.perfect_alignment ? 'text-green-600' : 'text-red-600'}>
+                    {setupAnalysis.moving_averages.perfect_alignment ? '✓' : '✗'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Price Above 20 SMA</span>
+                  <span className={setupAnalysis.moving_averages.price_above_20 ? 'text-green-600' : 'text-red-600'}>
+                    {setupAnalysis.moving_averages.price_above_20 ? '✓' : '✗'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Moving Averages Inclining</span>
+                  <span className="text-sm">
+                    {[setupAnalysis.moving_averages.sma_10_inclining, setupAnalysis.moving_averages.sma_20_inclining,
+                      setupAnalysis.moving_averages.sma_50_inclining, setupAnalysis.moving_averages.sma_200_inclining]
+                      .filter(Boolean).length}/4
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
-      {!selectedStock && allStocks.length > 0 && (
-        <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-8 text-center">
-          <i className="fas fa-chart-line text-4xl text-gray-400 mb-4"></i>
-          <p className="text-gray-600 dark:text-gray-400">Select a stock from the dropdown to view its chart and get automatic analysis</p>
+          {/* Range Structure */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Range Structure</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Range High</div>
+                  <div className="font-bold">{formatCurrency(setupAnalysis.range_structure.range_high)}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Range Low</div>
+                  <div className="font-bold">{formatCurrency(setupAnalysis.range_structure.range_low)}</div>
+                </div>
+              </div>
+
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center justify-between">
+                  <span>Higher Lows Pattern</span>
+                  <span className={setupAnalysis.range_structure.higher_lows ? 'text-green-600' : 'text-red-600'}>
+                    {setupAnalysis.range_structure.higher_lows ? '✓' : '✗'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Range Tightening</span>
+                  <span className={setupAnalysis.range_structure.range_tightening ? 'text-green-600' : 'text-red-600'}>
+                    {setupAnalysis.range_structure.range_tightening ? '✓' : '✗'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Range Size</span>
+                  <span>{setupAnalysis.range_structure.range_size_percent.toFixed(1)}%</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Position in Range</span>
+                  <span>{setupAnalysis.range_structure.current_position_in_range.toFixed(0)}%</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Volume Pattern */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Volume Analysis</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center justify-between">
+                  <span>Volume Drying Up</span>
+                  <span className={setupAnalysis.volume_pattern.volume_drying_up ? 'text-green-600' : 'text-red-600'}>
+                    {setupAnalysis.volume_pattern.volume_drying_up ? '✓' : '✗'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Thin Volume Days</span>
+                  <span>{setupAnalysis.volume_pattern.thin_volume_days}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Volume Ratio (Recent/Average)</span>
+                  <span>{setupAnalysis.volume_pattern.volume_ratio.toFixed(2)}</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Breakout Levels */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Breakout Analysis</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Previous Day High</div>
+                  <div className="font-bold">{formatCurrency(setupAnalysis.breakout_levels.previous_day_high)}</div>
+                  <div className="text-xs text-gray-500">
+                    {setupAnalysis.breakout_levels.distance_to_prev_high_percent.toFixed(1)}% away
+                  </div>
+                </div>
+                <div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Range High</div>
+                  <div className="font-bold">{formatCurrency(setupAnalysis.breakout_levels.range_high)}</div>
+                  <div className="text-xs text-gray-500">
+                    {setupAnalysis.breakout_levels.distance_to_range_high_percent.toFixed(1)}% away
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center justify-between">
+                  <span>Near Breakout (&lt;2% away)</span>
+                  <span className={setupAnalysis.breakout_levels.near_breakout ? 'text-green-600' : 'text-red-600'}>
+                    {setupAnalysis.breakout_levels.near_breakout ? '✓' : '✗'}
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       )}
     </div>

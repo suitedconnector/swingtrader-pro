@@ -1,0 +1,93 @@
+Pasted-Okay-here-is-a-meticulous-trading-checklist-for-swing-trading-drawing-on-the-provided-sources-and--1747963533561.txt
+Okay, here is a meticulous trading checklist for swing trading, drawing on the provided sources and our conversation history. This is structured to be transferable to a spreadsheet or used as a basis for building an application.
+Swing Trading Checklist based on Sources
+This checklist outlines the process from scanning for potential trades to exiting a position, incorporating the criteria and rules discussed.
+Phase 1: Scanning and Initial Stock Identification (End of Day Analysis)
+1.
+Run Scans: Use TC2000 or equivalent platform.
+◦
+Scan List: Run One-Month Gainer, Three-Month Gainer, and Six-Month Gainer scans. Also check the One-Week Gainer.
+◦
+Scan Criteria (Ensure these are set in your scanner formula):
+▪
+Top 2% of strongest stocks.
+▪
+Average Daily Range (ADR) > 5% (ADR in Percent formula needed).
+▪
+Price > $1.00.
+▪
+Dollar Volume > $30 million (or equivalent volume criteria based on stock price).
+2.
+Initial Filter (Avoid):
+◦
+Is the stock in the Biotechnology sector?. If yes, immediately discard..
+◦
+Is the stock illiquid or barcoding with insufficient volume/activity?. If yes, avoid.
+◦
+Is the stock price very low (e.g., 5 cents)?. If yes, avoid.
+3.
+Identify Stocks Gaining Momentum: Review the scan results for stocks showing strength.
+4.
+Add Potential Candidates to Watchlists:
+◦
+Add stocks gaining momentum (even without a clear setup yet) to a primary watch list (e.g., Flagged List in TC2000).
+◦
+Add stocks that are already setting up or going sideways according to the criteria below to a focused watch list (e.g., Focus List).
+Phase 2: Daily Chart Setup Analysis (End of Day Analysis for Candidates)
+For stocks on your focused watch list, analyze the daily chart using the 10, 20, 50, and 200 Simple Moving Averages (SMA) and Volume.
+1.
+Initial Move Check: Has the stock made a significant initial move up (e.g., 30% or more over multiple days/weeks)? Or is it clearly gaining momentum?.
+2.
+Pullback/Consolidation Check: Has the stock pulled back and built an orderly range after the move?.
+3.
+Range Structure Check:
+◦
+Is the stock putting in higher lows?
+◦
+Is the stock putting in lower highs, indicating a tightening range (or is the top flat)?.
+◦
+Is the stock holding the moving averages (especially 10 or 20 SMA) during the pullback?.
+4.
+Volume Check (During Pullback): Is the volume drying up as the stock consolidates or pulls back?. Are there thin candles during this period?.
+5.
+Moving Average Alignment Check: Are the daily moving averages (10, 20, 50, 200 SMA) inclining?. Ideally, is the 10 SMA above the 20 SMA, the 20 above the 50, and the 50 above the 200 (in order)?. Holding above the 200 SMA is generally good.
+6.
+Breakout Potential Check: Is the stock nearing a breakout level (e.g., previous day high, top of the range)?.
+7.
+Contextual Analysis Check:
+◦
+Market Condition: Is the overall market (e.g., NASDAQ/IXIC or SPY using 10/20 SMA crossover) trending higher?. If the market 10 SMA is below the 20 SMA, proceed with caution or avoid trading breakouts..
+◦
+Sector Strength: Is the stock in a currently strong or leading sector?. If trading in poor market conditions, is this the chosen leading stock in its sector (i.e., not holding multiple positions in the same sector)?.
+◦
+Earnings Date: Is the next earnings date approaching soon?. If yes, avoid trading the breakout into earnings..
+Phase 3: Pre-Entry Preparation (Before Market Open)
+1.
+Review Focused Watchlist: Identify stocks meeting all the setup criteria for a potential breakout today.
+2.
+Set Price Alerts: For each potential breakout candidate, set a price alert at the breakout level (e.g., previous day's high or range high) on your charting platform (TC2000).
+Phase 4: Entry Execution (Market Open - First Hour)
+1.
+Monitor Alerts/Watchlist: Watch your price alerts and focused watchlist right at market open (e.g., the first 15-30 minutes).
+2.
+Identify Breakout: When a stock hits its price alert or is clearly breaking out of its range.
+3.
+Determine Entry Type:
+◦
+If Gapping Up or already opening above the range: Go to the 5-minute chart (or 1-minute for experienced traders). Wait for the first candle (5-min or 1-min) to form..
+◦
+If Breaking Out without a significant gap: Monitor the stock as it crosses the breakout level. If it rips through right at open, you can still wait for the first 1-minute candle confirmation.
+4.
+Check Opening Volume: On the 5-minute chart, is the volume on the first candle significantly higher than previous days' opening candles?. This is confirmation.
+5.
+Execute Buy Order:
+◦
+If Gapping Up: Buy using a Market Order AS SOON AS the high of the first 5-minute (or 1-minute) candle is taken out.
+◦
+If Breaking Out (no gap): Buy using a Market Order AS SOON AS the stock crosses the breakout price.
+6.
+Determine Stop Loss Price: Immediately identify the Low of the Day. This is your initial stop loss price.
+7.
+Calculate Position Size:
+◦
+Use your Risk Calculator in TC2000 (or equivalent) or the formula: Number of Shares = Risk Amount / (Entry Price - Stop ...
