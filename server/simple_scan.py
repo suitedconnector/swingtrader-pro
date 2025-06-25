@@ -19,19 +19,41 @@ def scan_stock(symbol):
         info = ticker.info
         sector = info.get('sector', 'Unknown')
         
+        price = float(latest['Close'])
+        volume = int(latest['Volume'])
+        dollar_volume = price * volume
+        
         result = {
             'symbol': symbol,
-            'price': float(latest['Close']),
-            'volume': int(latest['Volume']),
+            'price': price,
+            'volume': volume,
             'change_percent': float(change_pct),
-            'sector': sector
+            'sector': sector,
+            'dollar_volume': dollar_volume
         }
         
-        # Only return if meets Morgan's 5% momentum criteria
-        if change_pct > 5:
-            return result
-        else:
+        # Apply ALL of Morgan's swing trading criteria
+        # 1. Price Movement > 5% gain (30-day momentum)
+        if change_pct <= 5:
             return None
+            
+        # 2. Volume > 500,000 shares (liquidity requirement)
+        if volume <= 500000:
+            return None
+            
+        # 3. Dollar Volume > $5M (institutional interest)
+        if dollar_volume <= 5000000:
+            return None
+            
+        # 4. Exclude biotechnology stocks (high volatility sector)
+        if 'biotech' in sector.lower() or 'biotechnology' in sector.lower():
+            return None
+            
+        # 5. Price > $10 (avoid penny stocks)
+        if price <= 10:
+            return None
+            
+        return result
             
     except Exception as e:
         print(f"Error scanning {symbol}: {e}", file=sys.stderr)

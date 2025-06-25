@@ -149,7 +149,15 @@ export function ScanningPhase() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
             <div className="flex items-center space-x-2">
               <span className="text-green-600">✓</span>
-              <span>Minimum 3% positive momentum (30-day)</span>
+              <span>Price Movement &gt; 5% gain (30-day)</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <span className="text-green-600">✓</span>
+              <span>Volume &gt; 500K shares (liquidity)</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <span className="text-green-600">✓</span>
+              <span>Dollar Volume &gt; $5M (institutional interest)</span>
             </div>
             <div className="flex items-center space-x-2">
               <span className="text-green-600">✓</span>
@@ -157,15 +165,7 @@ export function ScanningPhase() {
             </div>
             <div className="flex items-center space-x-2">
               <span className="text-green-600">✓</span>
-              <span>Focus on established sectors</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <span className="text-green-600">✓</span>
-              <span>Strong volume confirmation</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <span className="text-green-600">✓</span>
-              <span>Real-time market data validation</span>
+              <span>Price &gt; $10 (avoid penny stocks)</span>
             </div>
             <div className="flex items-center space-x-2">
               <span className="text-green-600">✓</span>
