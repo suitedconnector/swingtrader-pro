@@ -65,12 +65,23 @@ export class MemStorage implements IStorage {
   }
 
   private initializeDefaultData() {
-    // Initialize default watchlists
+    // Create default user with your settings
+    const defaultUser: User = {
+      id: 1,
+      username: 'testuser', 
+      password: 'hashedpassword',
+      email: 'tfrei320@gmail.com',
+      emailAlerts: true,
+      tradingBankroll: '125486.32'
+    };
+    this.users.set(1, defaultUser);
+
+    // Initialize watchlists with your stocks
     this.watchlists.set(1, {
       id: 1,
       name: "Focus List",
       type: "focus",
-      symbols: [],
+      symbols: ["TSLA", "GOOGL", "CVS", "MSFT", "AVGO", "AMD"],
       createdAt: new Date()
     });
     
@@ -78,11 +89,44 @@ export class MemStorage implements IStorage {
       id: 2,
       name: "Flagged List", 
       type: "flagged",
-      symbols: [],
+      symbols: ["NVDA", "BAC"],
       createdAt: new Date()
     });
     
     this.currentWatchlistId = 3;
+
+    // Restore your previous price alerts
+    const nvdaAlert: PriceAlert = {
+      id: 1,
+      symbol: 'NVDA',
+      targetPrice: '152.34',
+      alertType: 'breakout',
+      isActive: true,
+      createdAt: new Date()
+    };
+    this.priceAlerts.set(1, nvdaAlert);
+
+    const amdAlert: PriceAlert = {
+      id: 2, 
+      symbol: 'AMD',
+      targetPrice: '142.58',
+      alertType: 'breakout',
+      isActive: true,
+      createdAt: new Date()
+    };
+    this.priceAlerts.set(2, amdAlert);
+
+    const cvsAlert: PriceAlert = {
+      id: 3,
+      symbol: 'CVS', 
+      targetPrice: '69.61',
+      alertType: 'breakout',
+      isActive: true,
+      createdAt: new Date()
+    };
+    this.priceAlerts.set(3, cvsAlert);
+
+    this.currentAlertId = 4;
   }
 
   // User methods
