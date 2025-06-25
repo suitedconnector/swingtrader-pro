@@ -51,13 +51,10 @@ export function EntryPhase() {
   });
 
   // Get all available symbols from both watchlists and stocks
-  const watchlistStocks = watchlists.flatMap((wl: any) => wl.stocks || []);
-  const allStockSymbols = [...stocks.map(stock => stock.symbol), ...watchlistStocks];
-  const allStocks = Array.from(new Set(allStockSymbols));
-
-  // Add hardcoded stocks from your current watchlist as fallback
-  const fallbackStocks = ['ASST', 'VIGL', 'IONL'];
-  const finalStocks = allStocks.length > 0 ? allStocks : fallbackStocks;
+  const watchlistSymbols = watchlists.flatMap((wl: any) => wl.symbols || []);
+  const stockSymbols = stocks.map(stock => stock.symbol);
+  const allSymbols = [...stockSymbols, ...watchlistSymbols];
+  const availableStocks = Array.from(new Set(allSymbols)).filter(symbol => symbol && symbol.length > 0);
 
   // Function to automatically calculate entry and stop loss prices using yfinance
   const calculateOptimalPrices = async (symbol: string) => {
@@ -224,7 +221,7 @@ export function EntryPhase() {
                   <SelectValue placeholder="Choose from watchlist" />
                 </SelectTrigger>
                 <SelectContent>
-                  {finalStocks.map((symbol) => (
+                  {availableStocks.map((symbol) => (
                     <SelectItem key={symbol} value={symbol}>
                       {symbol}
                     </SelectItem>
