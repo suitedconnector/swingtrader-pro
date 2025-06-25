@@ -38,15 +38,38 @@ export function ManagementPhase() {
     });
   };
 
-  const handleExitPosition = (trade: Trade) => {
-    updateTradeMutation.mutate({
-      id: trade.id,
-      updates: {
-        status: 'closed',
-        exitDate: new Date(),
-        // In a real implementation, you'd set the actual exit price
-      },
-    });
+  const handleExitPosition = async (trade: Trade) => {
+    try {
+      // Get current market price for exit
+      const response = await fetch(`/api/stock-price/${trade.symbol}`);
+      const priceData = await response.json();
+      const currentPrice = parseFloat(priceData.currentPrice);
+      
+      // Calculate P&L
+      const entryPrice = Number(trade.entryPrice);
+      const pnl = (currentPrice - entryPrice) * trade.shares;
+      
+      updateTradeMutation.mutate({
+        id: trade.id,
+        updates: {
+          status: 'closed',
+          exitDate: new Date(),
+          exitPrice: currentPrice.toFixed(2),
+          pnl: pnl.toFixed(2),
+          exitReason: 'manual_exit'
+        },
+      });
+    } catch (error) {
+      console.error('Error getting exit price:', error);
+      // Fallback to exit without price
+      updateTradeMutation.mutate({
+        id: trade.id,
+        updates: {
+          status: 'closed',
+          exitDate: new Date(),
+        },
+      });
+    }
   };
 
   if (isLoading) {
@@ -93,48 +116,56 @@ export function ManagementPhase() {
                 </tr>
               </thead>
               <tbody className="bg-white dark:bg-dark-surface divide-y divide-gray-200 dark:divide-gray-700">
-                {activeTrades.map((trade) => (
-                  <tr key={trade.id}>
-                    <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">
-                      {trade.symbol}
-                    </td>
-                    <td className="px-4 py-3 text-sm font-mono">
-                      {trade.shares}
-                    </td>
-                    <td className="px-4 py-3 text-sm font-mono">
-                      ${trade.entryPrice}
-                    </td>
-                    <td className="px-4 py-3 text-sm font-mono">
-                      ${trade.stopLoss}
-                    </td>
-                    <td className="px-4 py-3 text-sm font-mono text-trading-error">
-                      ${trade.riskAmount}
-                    </td>
-                    <td className="px-4 py-3 text-sm">
-                      {trade.entryDate ? new Date(trade.entryDate).toLocaleDateString() : 'N/A'}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex space-x-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleTrimPosition(trade, 25)}
-                          disabled={updateTradeMutation.isPending}
-                        >
-                          Trim 25%
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => handleExitPosition(trade)}
-                          disabled={updateTradeMutation.isPending}
-                        >
-                          Exit
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {activeTrades.map((trade) => {
+                  // Calculate current P&L if we had real-time data
+                  const entryPrice = Number(trade.entryPrice);
+                  // For now, use entry price as current price placeholder until real-time data is fetched
+                  const currentPrice = entryPrice; 
+                  const { pnl, riskMultiple } = calculatePnL(trade, currentPrice);
+                  
+                  return (
+                    <tr key={trade.id}>
+                      <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">
+                        {trade.symbol}
+                      </td>
+                      <td className="px-4 py-3 text-sm font-mono">
+                        {trade.shares}
+                      </td>
+                      <td className="px-4 py-3 text-sm font-mono">
+                        ${trade.entryPrice}
+                      </td>
+                      <td className="px-4 py-3 text-sm font-mono">
+                        ${trade.stopLoss}
+                      </td>
+                      <td className="px-4 py-3 text-sm font-mono text-trading-error">
+                        ${trade.riskAmount}
+                      </td>
+                      <td className="px-4 py-3 text-sm">
+                        {trade.entryDate ? new Date(trade.entryDate).toLocaleDateString() : 'N/A'}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex space-x-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleTrimPosition(trade, 25)}
+                            disabled={updateTradeMutation.isPending}
+                          >
+                            Trim 25%
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => handleExitPosition(trade)}
+                            disabled={updateTradeMutation.isPending}
+                          >
+                            Exit
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

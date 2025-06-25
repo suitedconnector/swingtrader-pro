@@ -6,24 +6,30 @@ interface PriceData {
   currentPrice: number;
 }
 
-// Mock price data for demo - in production, connect to real market data API
+// Get real market data from the stock price API
 const getCurrentPrices = async (symbols: string[]): Promise<PriceData[]> => {
-  const mockPrices: Record<string, number> = {
-    'TSLA': 248.50,
-    'GOOGL': 185.20,
-    'CVS': 69.15,
-    'MSFT': 445.80,
-    'AVGO': 182.45,
-    'AMD': 140.25,
-    'NVDA': 149.80,
-    'BAC': 45.20,
-    'ASST': 12.35
-  };
-
-  return symbols.map(symbol => ({
-    symbol,
-    currentPrice: mockPrices[symbol] || 100.00
-  }));
+  const results: PriceData[] = [];
+  
+  for (const symbol of symbols) {
+    try {
+      const response = await fetch(`http://localhost:5000/api/stock-price/${symbol}`);
+      if (response.ok) {
+        const data = await response.json();
+        results.push({
+          symbol,
+          currentPrice: parseFloat(data.currentPrice)
+        });
+      } else {
+        console.error(`Failed to get price for ${symbol}`);
+        results.push({ symbol, currentPrice: 0 });
+      }
+    } catch (error) {
+      console.error(`Error fetching price for ${symbol}:`, error);
+      results.push({ symbol, currentPrice: 0 });
+    }
+  }
+  
+  return results;
 };
 
 export async function monitorActiveTrades(): Promise<void> {

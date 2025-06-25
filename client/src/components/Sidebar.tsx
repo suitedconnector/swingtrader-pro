@@ -28,9 +28,14 @@ export function Sidebar() {
   const focusList = watchlists.find(w => w.type === 'focus');
   const flaggedList = watchlists.find(w => w.type === 'flagged');
 
+  const { data: userProfile } = useQuery({
+    queryKey: ['/api/profile/1'],
+  });
+
+  // Calculate today's P&L from active trades using current market prices
   const todaysPnL = activeTrades.reduce((total, trade) => {
-    // In a real implementation, this would calculate current P&L based on current prices
-    return total + 0; // Placeholder
+    // This will be calculated with real market data in the monitoring system
+    return total + (Number(trade.pnl) || 0);
   }, 0);
 
   // Calculate actual win rate from completed trades
@@ -38,7 +43,7 @@ export function Sidebar() {
   const winningTrades = completedTrades.filter(trade => Number(trade.pnl) > 0);
   const winRate = completedTrades.length > 0 ? (winningTrades.length / completedTrades.length) * 100 : 0;
   const totalRiskUsed = activeTrades.reduce((total, trade) => total + Number(trade.riskAmount), 0);
-  const accountBalance = 125486.32; // Would come from user settings
+  const accountBalance = Number(userProfile?.tradingBankroll) || 125486.32;
   const riskPercentUsed = (totalRiskUsed / accountBalance) * 100;
 
   return (
@@ -53,29 +58,35 @@ export function Sidebar() {
           <div className="flex justify-between items-center">
             <span className="text-sm text-gray-600 dark:text-gray-400">SPY</span>
             <div className="text-right">
-              <div className="text-sm font-mono">{marketData?.spy.price || '$428.45'}</div>
-              <div className="text-xs text-trading-success">{marketData?.spy.change || '+0.85%'}</div>
+              <div className="text-sm font-mono">{marketData?.spy.price || 'Loading...'}</div>
+              <div className={`text-xs ${marketData?.spy.change?.startsWith('+') ? 'text-trading-success' : 'text-trading-error'}`}>
+                {marketData?.spy.change || 'Loading...'}
+              </div>
             </div>
           </div>
           <div className="flex justify-between items-center">
             <span className="text-sm text-gray-600 dark:text-gray-400">NASDAQ</span>
             <div className="text-right">
-              <div className="text-sm font-mono">{marketData?.nasdaq.price || '$15,234'}</div>
-              <div className="text-xs text-trading-success">{marketData?.nasdaq.change || '+1.24%'}</div>
+              <div className="text-sm font-mono">{marketData?.nasdaq.price || 'Loading...'}</div>
+              <div className={`text-xs ${marketData?.nasdaq.change?.startsWith('+') ? 'text-trading-success' : 'text-trading-error'}`}>
+                {marketData?.nasdaq.change || 'Loading...'}
+              </div>
             </div>
           </div>
           <div className="flex justify-between items-center">
             <span className="text-sm text-gray-600 dark:text-gray-400">VIX</span>
             <div className="text-right">
-              <div className="text-sm font-mono">{marketData?.vix.price || '$18.45'}</div>
-              <div className="text-xs text-trading-error">{marketData?.vix.change || '-2.15%'}</div>
+              <div className="text-sm font-mono">{marketData?.vix.price || 'Loading...'}</div>
+              <div className={`text-xs ${marketData?.vix.change?.startsWith('-') ? 'text-trading-success' : 'text-trading-error'}`}>
+                {marketData?.vix.change || 'Loading...'}
+              </div>
             </div>
           </div>
         </div>
         <div className="mt-3 p-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
           <div className="flex items-center text-sm text-trading-success">
             <i className="fas fa-check-circle mr-2"></i>
-            Market trend: {marketData?.trend || 'Bullish'}
+            Market trend: {marketData?.trend || 'Loading...'}
           </div>
         </div>
       </div>
