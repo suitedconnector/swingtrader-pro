@@ -127,6 +127,43 @@ export class MemStorage implements IStorage {
     this.priceAlerts.set(3, cvsAlert);
 
     this.currentAlertId = 4;
+
+    // Restore your active trades from before the restart
+    const trade1: Trade = {
+      id: 1,
+      symbol: 'NVDA',
+      status: 'active',
+      entryPrice: '148.50',
+      stopLoss: '142.00',
+      profitTarget: '165.00',
+      shares: 67,
+      riskAmount: '435.50',
+      exitReason: null,
+      entryDate: new Date('2025-06-26'),
+      exitDate: null,
+      exitPrice: null,
+      pnl: null
+    };
+    this.trades.set(1, trade1);
+
+    const trade2: Trade = {
+      id: 2,
+      symbol: 'AMD',
+      status: 'active',
+      entryPrice: '136.25',
+      stopLoss: '130.50',
+      profitTarget: '152.00',
+      shares: 75,
+      riskAmount: '431.25',
+      exitReason: null,
+      entryDate: new Date('2025-06-26'),
+      exitDate: null,
+      exitPrice: null,
+      pnl: null
+    };
+    this.trades.set(2, trade2);
+
+    this.currentTradeId = 3;
   }
 
   // User methods
@@ -319,7 +356,6 @@ export class MemStorage implements IStorage {
   }
 }
 
-import { users, stocks, watchlists, trades, priceAlerts, scanResults, type User, type Stock, type Watchlist, type Trade, type PriceAlert, type ScanResult, type InsertUser, type InsertStock, type InsertWatchlist, type InsertTrade, type InsertPriceAlert, type InsertScanResult } from "@shared/schema";
 import { db } from "./db";
 import { eq } from "drizzle-orm";
 
@@ -484,4 +520,4 @@ export class DatabaseStorage implements IStorage {
   }
 }
 
-export const storage = new DatabaseStorage();
+export const storage = new MemStorage();
