@@ -244,7 +244,7 @@ export function ChartSetupPhase() {
 
               <div className="space-y-2 text-sm">
                 <div className="flex items-center justify-between">
-                  <span>Perfect Alignment (10>20>50>200)</span>
+                  <span>Perfect Alignment (10&gt;20&gt;50&gt;200)</span>
                   <span className={setupAnalysis.moving_averages.perfect_alignment ? 'text-green-600' : 'text-red-600'}>
                     {setupAnalysis.moving_averages.perfect_alignment ? '✓' : '✗'}
                   </span>
