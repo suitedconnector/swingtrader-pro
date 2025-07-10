@@ -1,0 +1,36 @@
+[
+  {
+    "id": 1,
+    "name": "Focus List",
+    "type": "focus",
+    "symbols": [
+      "TSLA",
+      "GOOGL",
+      "CVS",
+      "MSFT",
+      "AVGO",
+      "AMD",
+      "NVDA",
+      "ORCL",
+      "NVDA",
+      "PFE",
+      "MSFT",
+      "AMZN",
+      "BAC",
+      "AAPL"
+    ],
+    "createdAt": "2025-07-07T04:38:43.493Z"
+  },
+  {
+    "id": 2,
+    "name": "Flagged List",
+    "type": "flagged",
+    "symbols": [
+      "NVDA",
+      "BAC",
+      "ORCL",
+      "NKE"
+    ],
+    "createdAt": "2025-07-07T04:38:43.493Z"
+  }
+]

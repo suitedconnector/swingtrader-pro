@@ -847,6 +847,48 @@ else:
     };
   }
 
+  // Setup analysis endpoint
+  app.get("/api/setup-analysis/:symbol", async (req, res) => {
+    try {
+      const { symbol } = req.params;
+      console.log(`Running setup analysis for ${symbol}`);
+      
+      const { spawn } = require('child_process');
+      const python = spawn('python3', ['server/setup_analyzer.py', symbol]);
+      
+      let stdout = '';
+      let stderr = '';
+
+      python.stdout.on('data', (data: Buffer) => {
+        stdout += data.toString();
+      });
+
+      python.stderr.on('data', (data: Buffer) => {
+        stderr += data.toString();
+      });
+
+      python.on('close', (code: number) => {
+        if (code !== 0) {
+          console.error(`Setup analyzer failed with code ${code}:`, stderr);
+          res.status(500).json({ message: 'Failed to analyze setup. Please try again.' });
+          return;
+        }
+
+        try {
+          const analysis = JSON.parse(stdout.trim());
+          res.json(analysis);
+        } catch (parseError) {
+          console.error('Failed to parse setup analysis:', parseError);
+          res.status(500).json({ message: 'Failed to analyze setup. Please try again.' });
+        }
+      });
+
+    } catch (error: any) {
+      console.error('Setup analysis error:', error);
+      res.status(500).json({ message: 'Failed to analyze setup. Please try again.' });
+    }
+  });
+
   // Market data endpoint (simulated)
   app.get("/api/market-data", async (req, res) => {
     try {

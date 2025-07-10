@@ -11,6 +11,23 @@ import sys
 from datetime import datetime, timedelta
 import json
 
+def convert_numpy_types(obj):
+    """Convert numpy types to Python native types for JSON serialization"""
+    if isinstance(obj, (np.integer, np.int64, np.int32)):
+        return int(obj)
+    elif isinstance(obj, (np.floating, np.float64, np.float32)):
+        return float(obj)
+    elif isinstance(obj, (np.bool_, np.bool)):
+        return bool(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, dict):
+        return {key: convert_numpy_types(value) for key, value in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_numpy_types(item) for item in obj]
+    else:
+        return obj
+
 def calculate_adr(hist_data, period=20):
     """Calculate Average Daily Range (ADR) percentage"""
     if len(hist_data) < period:
@@ -260,6 +277,8 @@ def main():
     result = analyze_setup(symbol)
     
     if result:
+        # Convert numpy types before JSON serialization
+        result = convert_numpy_types(result)
         print(json.dumps(result, indent=2))
     else:
         print(json.dumps({"error": f"Could not analyze setup for {symbol}"}))

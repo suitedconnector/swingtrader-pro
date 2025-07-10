@@ -1,0 +1,40 @@
+[
+  {
+    "id": 1,
+    "symbol": "NVDA",
+    "targetPrice": "152.34",
+    "alertType": "breakout",
+    "isActive": true,
+    "createdAt": "2025-07-07T04:38:43.493Z"
+  },
+  {
+    "id": 2,
+    "symbol": "AMD",
+    "targetPrice": "142.58",
+    "alertType": "breakout",
+    "isActive": true,
+    "createdAt": "2025-07-07T04:38:43.493Z"
+  },
+  {
+    "id": 3,
+    "symbol": "CVS",
+    "targetPrice": "69.61",
+    "alertType": "breakout",
+    "isActive": true,
+    "createdAt": "2025-07-07T04:38:43.493Z"
+  },
+  {
+    "symbol": "BAC",
+    "targetPrice": "48.40",
+    "alertType": "breakout",
+    "id": 4,
+    "createdAt": "2025-07-10T20:11:07.156Z"
+  },
+  {
+    "symbol": "CVS",
+    "targetPrice": "68.66",
+    "alertType": "breakout",
+    "id": 5,
+    "createdAt": "2025-07-10T20:14:48.415Z"
+  }
+]

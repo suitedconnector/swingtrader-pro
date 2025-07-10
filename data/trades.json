@@ -1,0 +1,62 @@
+[
+  {
+    "id": 1,
+    "symbol": "NVDA",
+    "status": "closed",
+    "entryPrice": "148.50",
+    "stopLoss": "142.00",
+    "profitTarget": "165.00",
+    "shares": 67,
+    "riskAmount": "435.50",
+    "exitReason": "stop_loss",
+    "entryDate": "2025-06-26T00:00:00.000Z",
+    "exitDate": "2025-07-07T04:45:45.644Z",
+    "exitPrice": "142",
+    "pnl": "-435.5"
+  },
+  {
+    "id": 2,
+    "symbol": "AMD",
+    "status": "closed",
+    "entryPrice": "136.25",
+    "stopLoss": "130.50",
+    "profitTarget": "152.00",
+    "shares": 75,
+    "riskAmount": "431.25",
+    "exitReason": "stop_loss",
+    "entryDate": "2025-06-26T00:00:00.000Z",
+    "exitDate": "2025-07-07T04:45:45.957Z",
+    "exitPrice": "130.5",
+    "pnl": "-431.25"
+  },
+  {
+    "symbol": "BAC",
+    "entryPrice": "47.92",
+    "stopLoss": "44.09",
+    "profitTarget": "55.59",
+    "shares": 65,
+    "riskAmount": "250.00",
+    "status": "active",
+    "id": 3,
+    "exitReason": null,
+    "entryDate": "2025-07-10T20:12:15.309Z",
+    "exitDate": null,
+    "exitPrice": null,
+    "pnl": null
+  },
+  {
+    "symbol": "CVS",
+    "entryPrice": "67.99",
+    "stopLoss": "62.55",
+    "profitTarget": "78.87",
+    "shares": 45,
+    "riskAmount": "250.00",
+    "status": "closed",
+    "id": 4,
+    "exitReason": "stop_loss",
+    "entryDate": "2025-07-10T20:15:29.320Z",
+    "exitDate": "2025-07-10T20:19:19.491Z",
+    "exitPrice": "62.55",
+    "pnl": "-244.7999999999999"
+  }
+]

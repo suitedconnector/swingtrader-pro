@@ -1,0 +1,10 @@
+[
+  {
+    "id": 1,
+    "username": "testuser",
+    "password": "hashedpassword",
+    "email": "tfrei320@gmail.com",
+    "emailAlerts": true,
+    "tradingBankroll": "125486.32"
+  }
+]
