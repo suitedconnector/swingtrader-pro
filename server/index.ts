@@ -9,10 +9,15 @@ app.use(express.urlencoded({ extended: false }));
 
 // Simple request logging
 app.use((req, res, next) => {
-  if (req.path.startsWith("/api")) {
-    console.log(`${req.method} ${req.path}`);
+  try {
+    if (req.path.startsWith("/api")) {
+      console.log(`${req.method} ${req.path}`);
+    }
+    next();
+  } catch (error) {
+    console.error('Middleware error:', error);
+    next();
   }
-  next();
 });
 
 (async () => {

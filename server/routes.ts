@@ -848,34 +848,38 @@ else:
   }
 
   // Setup analysis endpoint  
-  app.get("/api/setup-analysis/:symbol", (req, res) => {
+  app.get("/api/setup-analysis/:symbol", async (req, res) => {
     const { symbol } = req.params;
     console.log(`Running setup analysis for ${symbol}`);
     
-    const { exec } = require('child_process');
-    const command = `cd server && python3 setup_analyzer.py ${symbol}`;
-    
-    exec(command, { timeout: 30000 }, (error: any, stdout: string, stderr: string) => {
-      if (error) {
-        console.error('Python execution error:', error);
-        console.error('stderr:', stderr);
-        res.status(500).json({ message: 'Failed to analyze setup. Please try again.' });
-        return;
-      }
+    try {
+      const command = `cd server && python3 setup_analyzer.py ${symbol}`;
       
-      if (stderr) {
-        console.warn('Python warnings:', stderr);
-      }
-      
-      try {
-        const analysis = JSON.parse(stdout.trim());
-        res.json(analysis);
-      } catch (parseError) {
-        console.error('JSON parse error:', parseError);
-        console.error('stdout was:', stdout);
-        res.status(500).json({ message: 'Failed to analyze setup. Please try again.' });
-      }
-    });
+      exec(command, { timeout: 30000 }, (error: any, stdout: string, stderr: string) => {
+        if (error) {
+          console.error('Python execution error:', error);
+          console.error('stderr:', stderr);
+          res.status(500).json({ message: 'Failed to analyze setup. Please try again.' });
+          return;
+        }
+        
+        if (stderr) {
+          console.warn('Python warnings:', stderr);
+        }
+        
+        try {
+          const analysis = JSON.parse(stdout.trim());
+          res.json(analysis);
+        } catch (parseError) {
+          console.error('JSON parse error:', parseError);
+          console.error('stdout was:', stdout);
+          res.status(500).json({ message: 'Failed to analyze setup. Please try again.' });
+        }
+      });
+    } catch (importError) {
+      console.error('Import error:', importError);
+      res.status(500).json({ message: 'Failed to analyze setup. Please try again.' });
+    }
   });
 
   // Market data endpoint (simulated)
