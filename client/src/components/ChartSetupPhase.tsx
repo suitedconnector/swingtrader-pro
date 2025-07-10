@@ -71,7 +71,7 @@ export function ChartSetupPhase() {
 
   // Setup analysis query
   const { data: setupAnalysis, isLoading: analysisLoading, error: analysisError } = useQuery<SetupAnalysis>({
-    queryKey: ['/api/setup-analysis', analysisSymbol],
+    queryKey: [`/api/setup-analysis/${analysisSymbol}`],
     enabled: !!analysisSymbol,
   });
 

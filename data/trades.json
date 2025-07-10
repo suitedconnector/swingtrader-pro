@@ -36,13 +36,13 @@
     "profitTarget": "55.59",
     "shares": 65,
     "riskAmount": "250.00",
-    "status": "active",
+    "status": "closed",
     "id": 3,
-    "exitReason": null,
+    "exitReason": "stop_loss",
     "entryDate": "2025-07-10T20:12:15.309Z",
-    "exitDate": null,
-    "exitPrice": null,
-    "pnl": null
+    "exitDate": "2025-07-10T20:20:11.304Z",
+    "exitPrice": "44.09",
+    "pnl": "-248.94999999999987"
   },
   {
     "symbol": "CVS",
