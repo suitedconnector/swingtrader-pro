@@ -93,11 +93,14 @@ def get_sp500_symbols():
 def main():
     # Scan the entire S&P 500 market for comprehensive coverage
     symbols = get_sp500_symbols()
-    print(f"Scanning {len(symbols)} stocks from the market...", file=sys.stderr)
+    print(f"Scanning {min(len(symbols), 20)} stocks from the market...", file=sys.stderr)
     
     qualifying = []
+    processed = 0
+    max_stocks = 20  # Limit to first 20 stocks for faster scanning
     
-    for symbol in symbols:
+    for symbol in symbols[:max_stocks]:
+        processed += 1
         print(f"Scanning {symbol}...", file=sys.stderr)
         result = scan_stock(symbol)
         if result:
