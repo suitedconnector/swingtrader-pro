@@ -8,6 +8,7 @@ import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
+import TradingViewChart from './TradingViewChart';
 
 interface SetupAnalysis {
   symbol: string;
@@ -158,6 +159,23 @@ export function ChartSetupPhase() {
           </div>
         )}
       </div>
+
+      {/* TradingView Chart */}
+      {analysisSymbol && (
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Live Chart - {analysisSymbol}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <TradingViewChart 
+              symbol={analysisSymbol}
+              height={400}
+              interval="D"
+              theme="light"
+            />
+          </CardContent>
+        </Card>
+      )}
 
       {/* Analysis Results */}
       {analysisLoading && (

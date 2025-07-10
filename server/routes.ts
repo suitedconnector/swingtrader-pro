@@ -847,65 +847,35 @@ else:
     };
   }
 
-  // Test endpoint
-  app.get("/api/test", (req, res) => {
-    res.json({ message: "Test endpoint working" });
-  });
-
-  // Setup analysis endpoint
+  // Setup analysis endpoint  
   app.get("/api/setup-analysis/:symbol", (req, res) => {
     const { symbol } = req.params;
     console.log(`Running setup analysis for ${symbol}`);
     
-    const analysis = {
-      symbol: symbol,
-      sector: "Technology",
-      setup_score: 65,
-      setup_quality: "Good",
-      adr_percent: 3.2,
-      moving_averages: {
-        current_price: 150.25,
-        sma_10: 148.50,
-        sma_20: 145.30,
-        sma_50: 142.10,
-        sma_200: 135.75,
-        perfect_alignment: true,
-        price_above_10: true,
-        price_above_20: true,
-        price_above_50: true,
-        price_above_200: true,
-        sma_10_inclining: true,
-        sma_20_inclining: true,
-        sma_50_inclining: true,
-        sma_200_inclining: false
-      },
-      range_structure: {
-        higher_lows: true,
-        range_tightening: true,
-        range_high: 152.50,
-        range_low: 145.20,
-        range_size_percent: 5.0,
-        current_position_in_range: 70.5
-      },
-      volume_pattern: {
-        avg_volume_50d: 25000000,
-        recent_avg_volume: 18000000,
-        volume_drying_up: true,
-        thin_volume_days: 8,
-        volume_ratio: 0.72
-      },
-      breakout_levels: {
-        previous_day_high: 151.20,
-        range_high: 152.50,
-        resistance_level: 152.25,
-        distance_to_prev_high_percent: 0.6,
-        distance_to_range_high_percent: 1.5,
-        near_breakout: true
-      },
-      analysis_date: new Date().toISOString()
-    };
-
-    res.json(analysis);
+    const { exec } = require('child_process');
+    const command = `cd server && python3 setup_analyzer.py ${symbol}`;
+    
+    exec(command, { timeout: 30000 }, (error: any, stdout: string, stderr: string) => {
+      if (error) {
+        console.error('Python execution error:', error);
+        console.error('stderr:', stderr);
+        res.status(500).json({ message: 'Failed to analyze setup. Please try again.' });
+        return;
+      }
+      
+      if (stderr) {
+        console.warn('Python warnings:', stderr);
+      }
+      
+      try {
+        const analysis = JSON.parse(stdout.trim());
+        res.json(analysis);
+      } catch (parseError) {
+        console.error('JSON parse error:', parseError);
+        console.error('stdout was:', stdout);
+        res.status(500).json({ message: 'Failed to analyze setup. Please try again.' });
+      }
+    });
   });
 
   // Market data endpoint (simulated)
