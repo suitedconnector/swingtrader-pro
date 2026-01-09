@@ -62,9 +62,14 @@ def scan_stock(symbol):
 def get_sp500_symbols():
     """Get S&P 500 symbols as a proxy for the market"""
     import pandas as pd
+    import urllib.request
     try:
-        # Get S&P 500 list from Wikipedia (most comprehensive free source)
-        tables = pd.read_html('https://en.wikipedia.org/wiki/List_of_S%26P_500_companies')
+        # Get S&P 500 list from Wikipedia with proper User-Agent
+        url = 'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies'
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'})
+        with urllib.request.urlopen(req, timeout=10) as response:
+            html = response.read().decode('utf-8')
+        tables = pd.read_html(html)
         sp500_table = tables[0]
         symbols = sp500_table['Symbol'].tolist()
         # Clean symbols (remove dots, handle special cases)
@@ -76,28 +81,36 @@ def get_sp500_symbols():
         return cleaned_symbols
     except Exception as e:
         print(f"Could not fetch S&P 500 list: {e}", file=sys.stderr)
-        # Fallback to major stocks if Wikipedia fails
+        # Fallback: mix of momentum stocks, growth stocks, and volatile sectors
+        # These tend to have higher price movement for swing trading
         return [
-            'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'TSLA', 'NVDA', 'JPM', 'BAC', 'V',
-            'MA', 'UNH', 'JNJ', 'HD', 'WMT', 'PG', 'KO', 'PFE', 'ABBV', 'MRK',
-            'COST', 'TMO', 'ABT', 'CVX', 'XOM', 'LLY', 'AVGO', 'WFC', 'CRM', 'ORCL',
-            'ADBE', 'NKE', 'DHR', 'VZ', 'NEE', 'TXN', 'BMY', 'PM', 'RTX', 'HON',
-            'QCOM', 'UPS', 'LOW', 'AMD', 'SBUX', 'IBM', 'T', 'CAT', 'GS', 'INTU',
-            'ISRG', 'CVS', 'MDT', 'GE', 'DE', 'MMM', 'AXP', 'BA', 'AMGN', 'BLK',
-            'SYK', 'TJX', 'BKNG', 'ADP', 'MDLZ', 'GILD', 'ADI', 'CI', 'ZTS', 'MO',
-            'CB', 'USB', 'DUK', 'SO', 'CL', 'LRCX', 'TGT', 'BDX', 'AON', 'EL',
-            'SCHW', 'NSC', 'ITW', 'HUM', 'BSX', 'MMC', 'ETN', 'PLD', 'APD', 'EOG',
-            'ICE', 'FIS', 'EMR', 'KLAC', 'CSX', 'FCX', 'SHW', 'PNC', 'GM', 'F'
+            # High-momentum tech/growth
+            'NVDA', 'AMD', 'TSLA', 'META', 'SMCI', 'ARM', 'PLTR', 'SNOW', 'DDOG', 'NET',
+            'CRWD', 'COIN', 'MSTR', 'AVGO', 'ANET', 'PANW', 'MU', 'MRVL', 'NFLX', 'UBER',
+            # Semiconductors (volatile)
+            'ASML', 'KLAC', 'LRCX', 'AMAT', 'ON', 'TXN', 'INTC', 'QCOM', 'MPWR', 'SWKS',
+            # Energy (volatile)
+            'XOM', 'CVX', 'OXY', 'EOG', 'SLB', 'HAL', 'DVN', 'MPC', 'VLO', 'PSX',
+            # Financials
+            'JPM', 'GS', 'MS', 'SCHW', 'C', 'BAC', 'WFC', 'BLK', 'AXP', 'COF',
+            # Consumer/Retail
+            'AMZN', 'COST', 'TGT', 'HD', 'LOW', 'NKE', 'SBUX', 'CMG', 'LULU', 'DECK',
+            # Healthcare (non-biotech)
+            'UNH', 'LLY', 'ISRG', 'BSX', 'SYK', 'DHR', 'TMO', 'ABT', 'MDT', 'ZTS',
+            # Industrial
+            'CAT', 'DE', 'BA', 'GE', 'RTX', 'HON', 'UPS', 'FDX', 'LMT', 'NOC',
+            # Large cap stable (reference)
+            'AAPL', 'MSFT', 'GOOGL', 'V', 'MA', 'JNJ', 'PG', 'KO', 'MRK', 'WMT'
         ]
 
 def main():
-    # Scan the entire S&P 500 market for comprehensive coverage
+    # Scan the market for swing trading opportunities
     symbols = get_sp500_symbols()
-    print(f"Scanning {min(len(symbols), 20)} stocks from the market...", file=sys.stderr)
+    max_stocks = 50  # Scan 50 stocks for better coverage of strong gainers
+    print(f"Scanning {min(len(symbols), max_stocks)} stocks from the market...", file=sys.stderr)
     
     qualifying = []
     processed = 0
-    max_stocks = 20  # Limit to first 20 stocks for faster scanning
     
     for symbol in symbols[:max_stocks]:
         processed += 1
