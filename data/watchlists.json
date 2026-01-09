@@ -17,7 +17,10 @@
       "MSFT",
       "AMZN",
       "BAC",
-      "AAPL"
+      "AAPL",
+      "AAPL",
+      "MRK",
+      "AMZN"
     ],
     "createdAt": "2025-07-07T04:38:43.493Z"
   },
@@ -29,7 +32,8 @@
       "NVDA",
       "BAC",
       "ORCL",
-      "NKE"
+      "NKE",
+      "AAPL"
     ],
     "createdAt": "2025-07-07T04:38:43.493Z"
   }

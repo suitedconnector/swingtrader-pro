@@ -36,5 +36,33 @@
     "alertType": "breakout",
     "id": 5,
     "createdAt": "2025-07-10T20:14:48.415Z"
+  },
+  {
+    "symbol": "ORCL",
+    "targetPrice": "7.87",
+    "alertType": "breakout",
+    "id": 6,
+    "createdAt": "2025-10-24T22:08:04.725Z"
+  },
+  {
+    "symbol": "AAPL",
+    "targetPrice": "270.70",
+    "alertType": "breakout",
+    "id": 7,
+    "createdAt": "2025-10-24T22:08:15.918Z"
+  },
+  {
+    "symbol": "NVDA",
+    "targetPrice": "7.51",
+    "alertType": "breakout",
+    "id": 8,
+    "createdAt": "2026-01-09T21:00:03.970Z"
+  },
+  {
+    "symbol": "SPY",
+    "targetPrice": "710.20",
+    "alertType": "breakout",
+    "id": 9,
+    "createdAt": "2026-01-09T21:01:46.657Z"
   }
 ]
