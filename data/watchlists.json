@@ -4,23 +4,14 @@
     "name": "Focus List",
     "type": "focus",
     "symbols": [
-      "TSLA",
       "GOOGL",
-      "CVS",
-      "MSFT",
-      "AVGO",
-      "AMD",
-      "NVDA",
-      "ORCL",
-      "NVDA",
       "PFE",
-      "MSFT",
-      "AMZN",
       "BAC",
-      "AAPL",
-      "AAPL",
       "MRK",
-      "AMZN"
+      "ACN",
+      "A",
+      "ADI",
+      "ABBV"
     ],
     "createdAt": "2025-07-07T04:38:43.493Z"
   },
