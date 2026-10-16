@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Sniper Dashboard</title>
+    <style>
+        body { font-family: sans-serif; background: #1a1a1a; color: #eee; padding: 20px; }
+        .log-entry { font-family: monospace; border-bottom: 1px solid #333; padding: 5px; }
+    </style>
+</head>
+<body>
+    <h1>Sniper Dashboard</h1>
+    <div id="logs">Loading...</div>
+    <script>
+        async function update() {
+            const res = await fetch('/api/alerts');
+            const data = await res.json();
+            document.getElementById('logs').innerHTML = data.logs.map(l => `<div class="log-entry">${l}</div>`).join('');
+        }
+        setInterval(update, 5000);
+        update();
+    </script>
+</body>
+</html>
