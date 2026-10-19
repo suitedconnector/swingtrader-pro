@@ -2,6 +2,9 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { startTradeMonitoring } from "./tradeMonitor";
+import { DatabaseStorage } from "./storage";
+
+const storage = new DatabaseStorage();
 
 const app = express();
 app.use(express.json());
