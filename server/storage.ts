@@ -277,11 +277,13 @@ export class MemStorage implements IStorage {
     const trade: Trade = {
       ...insertTrade,
       id,
-      status: insertTrade.status || 'active',
-      entryDate: new Date(),
-      exitDate: null,
-      exitPrice: null,
-      pnl: null
+      status: insertTrade.status ?? 'active',
+      entryDate: insertTrade.entryDate ?? new Date(),
+      exitDate: insertTrade.exitDate ?? null,
+      exitPrice: insertTrade.exitPrice ?? null,
+      pnl: insertTrade.pnl ?? null,
+      profitTarget: insertTrade.profitTarget ?? null,
+      exitReason: insertTrade.exitReason ?? null
     };
     this.trades.set(id, trade);
     return trade;
