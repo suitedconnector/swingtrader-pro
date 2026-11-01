@@ -7,6 +7,7 @@ import { storage } from "./storage";
 import { updateUserProfileSchema, registerUserSchema } from "@shared/schema";
 import { sendTestAlert } from "./emailService";
 import { getZohoAuthUrl, sendZohoTest } from "./zohoService";
+import { getStockPrice } from "./massiveService";
 import { authenticateWithCloudflare } from "./authMiddleware";
 
 export async function registerRoutes(app: Express) {
@@ -206,7 +207,7 @@ export async function registerRoutes(app: Express) {
       res.status(500).json({ message: "Failed to update price alert" });
     }
   });
-  
+
   // Get stock price and suggested breakout target
   app.get("/api/stock-price/:symbol", async (req, res) => {
     try {
@@ -216,36 +217,14 @@ export async function registerRoutes(app: Express) {
         return res.status(400).json({ message: "Invalid stock symbol" });
       }
 
-      const apiKey = process.env.ALPHA_VANTAGE_API_KEY;
+      const apiKey = process.env.MASSIVE_API_KEY;
       if (!apiKey) {
         return res.status(500).json({ message: "API key not configured" });
       }
 
-      const url = new URL("https://www.alphavantage.co/query");
-      url.searchParams.set("function", "GLOBAL_QUOTE");
-      url.searchParams.set("symbol", symbol);
-      url.searchParams.set("apikey", apiKey);
-
-      const response = await fetch(url.toString());
-      if (!response.ok) {
-        return res.status(502).json({ message: "Stock data provider unavailable" });
-      }
-
-      const data = await response.json();
-      const quote = data["Global Quote"];
-
-      if (!quote || !quote["05. price"]) {
-        return res.status(502).json({
-          message: data.Note || data.Information || "Stock data not available"
-        });
-      }
-
-      const currentPrice = Number(quote["05. price"]);
-      const dayHigh = Number(quote["03. high"]) || currentPrice;
-      const dayLow = Number(quote["04. low"]) || currentPrice;
-
-      if (![currentPrice, dayHigh, dayLow].every(Number.isFinite) || currentPrice <= 0) {
-        return res.status(502).json({ message: "Invalid stock data received" });
+      const { currentPrice, dayHigh, dayLow } = await getStockPrice(symbol, apiKey);
+      if (!currentPrice) {
+        return res.status(404).json({ message: "Stock price data not found" });
       }
 
       const suggestedBreakout = Math.max(dayHigh * 1.02, currentPrice * 1.03);
@@ -259,7 +238,7 @@ export async function registerRoutes(app: Express) {
       });
     } catch (error) {
       console.error("Stock price error:", error);
-      return res.status(500).json({ message: "Failed to fetch stock price" });
+      return res.status(502).json({ message: "Failed to fetch stock price data" });
     }
   });
 
@@ -273,10 +252,10 @@ export async function registerRoutes(app: Express) {
           else resolve({ stdout, stderr });
         });
       });
-      
+
       let qualifyingStocks = [];
       try { qualifyingStocks = JSON.parse(stdout.trim()); } catch (e) { qualifyingStocks = []; }
-      
+
       for (const stock of qualifyingStocks) {
         await storage.createScanResult({
           symbol: stock.symbol,
