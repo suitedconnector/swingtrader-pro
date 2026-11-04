@@ -60,7 +60,7 @@ export function ScanningPhase() {
       }, 500);
       
       try {
-        const result = await apiRequest('POST', '/api/run-scans');
+        const result = await apiRequest('POST', '/api/run-scans-v2');
         clearInterval(progressInterval);
         setScanProgress(100);
         setCurrentStock('Scan complete!');
@@ -185,13 +185,9 @@ export function ScanningPhase() {
                   <span className="font-mono">${marketData.spy.price} {marketData.spy.change}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>NASDAQ:</span>
+                  <span>QQQ (Nasdaq-100):</span>
                   <span className="font-mono">${marketData.nasdaq.price} {marketData.nasdaq.change}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>VIX:</span>
-                  <span className="font-mono">${marketData.vix.price} {marketData.vix.change}</span>
-                </div>
+                </div>                
                 <div className="pt-2 border-t border-gray-200 dark:border-gray-600">
                   <span className="text-xs text-gray-600 dark:text-gray-400">Trend: </span>
                   <span className={`text-xs font-medium ${
