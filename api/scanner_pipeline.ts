@@ -10,8 +10,9 @@ export async function runScansV2(req: Request, res: Response) {
     const projectRoot = process.cwd();
     const scannerPath = path.join(projectRoot, "api", "simple_scan_new.py");
 
-    const scanner = spawn("python3", [scannerPath], {
+    const scanner = spawn(path.join(projectRoot, ".venv", "bin", "python"), [scannerPath], {
       cwd: projectRoot,
+      env: { ...process.env, PYTHONPATH: projectRoot },
     });
 
     let stdout = "";

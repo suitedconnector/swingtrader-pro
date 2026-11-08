@@ -10,6 +10,8 @@ import type { ScanResult, Watchlist } from '@shared/schema';
 export function ScanningPhase() {
   const queryClient = useQueryClient();
   const [selectedSector, setSelectedSector] = useState<string>('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [scanProgress, setScanProgress] = useState(0);
   const [isScanning, setIsScanning] = useState(false);
   const [currentStock, setCurrentStock] = useState<string>('');
@@ -79,6 +81,7 @@ export function ScanningPhase() {
       }
     },
     onSuccess: () => {
+      setCurrentPage(1);
       queryClient.invalidateQueries({ queryKey: ['/api/scan-results'] });
     },
   });
@@ -86,17 +89,28 @@ export function ScanningPhase() {
   const resetScansMutation = useMutation({
     mutationFn: () => apiRequest('DELETE', '/api/scan-results'),
     onSuccess: () => {
+      setCurrentPage(1);
       queryClient.invalidateQueries({ queryKey: ['/api/scan-results'] });
     },
   });
 
   const addToWatchlistMutation = useMutation({
-    mutationFn: ({ watchlistId, symbol }: { watchlistId: number; symbol: string }) => {
-      const watchlist = watchlists.find(w => w.id === watchlistId);
-      if (!watchlist) throw new Error('Watchlist not found');
-      
-      const updatedSymbols = [...watchlist.symbols, symbol];
-      return apiRequest('PATCH', `/api/watchlists/${watchlistId}`, {
+    mutationFn: async ({
+      watchlist,
+      symbol
+    }: {
+      watchlist: Watchlist;
+      symbol: string;
+    }) => {
+      const updatedSymbols = Array.from(
+        new Set([...watchlist.symbols, symbol])
+      );
+
+      if (updatedSymbols.length === watchlist.symbols.length) {
+        return;
+      }
+
+      await apiRequest('PATCH', `/api/watchlists/${watchlist.id}`, {
         symbols: updatedSymbols
       });
     },
@@ -109,10 +123,41 @@ export function ScanningPhase() {
     runScansMutation.mutate();
   };
 
-  const handleAddToWatchlist = (symbol: string, type: 'focus' | 'flagged') => {
-    const watchlist = watchlists.find(w => w.type === type);
-    if (watchlist) {
-      addToWatchlistMutation.mutate({ watchlistId: watchlist.id, symbol });
+  const createWatchlistMutation = useMutation({
+    mutationFn: async ({ type, name }: { type: string; name: string }) => {
+      const res = await apiRequest('POST', '/api/watchlists', {
+        type,
+        name,
+        symbols: []
+      });
+      return await res.json() as Watchlist;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/watchlists'] });
+    },
+  });
+
+  const handleAddToWatchlist = async (
+    symbol: string,
+    type: 'focus' | 'flagged'
+  ) => {
+    try {
+      let watchlist = watchlists.find(w => w.type === type);
+
+      if (!watchlist) {
+        const name = type === 'focus' ? 'Focus List' : 'Flagged List';
+        watchlist = await createWatchlistMutation.mutateAsync({
+          type,
+          name
+        });
+      }
+
+      await addToWatchlistMutation.mutateAsync({
+        watchlist,
+        symbol
+      });
+    } catch (err) {
+      console.error(`Failed to add ${symbol} to ${type} list:`, err);
     }
   };
 
@@ -124,6 +169,17 @@ export function ScanningPhase() {
     if (selectedSector === 'Healthcare' && isBiotechStock(result.sector)) return false;
     return result.sector.toLowerCase().includes(selectedSector.toLowerCase());
   });
+
+  // Paginate the filtered results without changing the underlying scan data.
+  const totalPages = Math.max(1, Math.ceil(filteredScanResults.length / pageSize));
+  const paginatedScanResults = filteredScanResults.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  );
+  const firstDisplayed = filteredScanResults.length === 0
+    ? 0
+    : (currentPage - 1) * pageSize + 1;
+  const lastDisplayed = Math.min(currentPage * pageSize, filteredScanResults.length);
 
   // Calculate summary statistics
   const scanStats = {
@@ -306,7 +362,13 @@ export function ScanningPhase() {
             <h4 className="font-medium text-gray-900 dark:text-white">Scan Results</h4>
             <div className="flex items-center space-x-2">
               <span className="text-sm text-gray-600 dark:text-gray-400">Filter by Sector:</span>
-              <Select value={selectedSector} onValueChange={setSelectedSector}>
+              <Select
+                value={selectedSector}
+                onValueChange={(value) => {
+                  setSelectedSector(value);
+                  setCurrentPage(1);
+                }}
+              >
                 <SelectTrigger className="w-48">
                   <SelectValue />
                 </SelectTrigger>
@@ -336,6 +398,7 @@ export function ScanningPhase() {
               </p>
             </div>
           ) : (
+            <div>
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                 <thead className="bg-gray-50 dark:bg-gray-800">
@@ -349,7 +412,7 @@ export function ScanningPhase() {
                   </tr>
                 </thead>
                 <tbody className="bg-white dark:bg-dark-surface divide-y divide-gray-200 dark:divide-gray-700">
-                  {filteredScanResults.map((result) => (
+                  {paginatedScanResults.map((result) => (
                     <tr key={result.id} className={isBiotechStock(result.sector) ? 'bg-red-50 dark:bg-red-900/20' : ''}>
                       <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">{result.symbol}</td>
                       <td className="px-4 py-3 text-sm font-mono text-gray-900 dark:text-white">${result.price}</td>
@@ -387,6 +450,54 @@ export function ScanningPhase() {
                   ))}
                 </tbody>
               </table>
+            </div>
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4">
+              <div className="flex items-center gap-3 text-sm text-gray-600 dark:text-gray-400">
+                <span>
+                  Showing {firstDisplayed}–{lastDisplayed} of {filteredScanResults.length} stocks
+                </span>
+                <Select
+                  value={String(pageSize)}
+                  onValueChange={(value) => {
+                    setPageSize(Number(value));
+                    setCurrentPage(1);
+                  }}
+                >
+                  <SelectTrigger className="w-20">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[10, 20, 30, 40, 50].map((size) => (
+                      <SelectItem key={size} value={String(size)}>
+                        {size}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <span>per page</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setCurrentPage(page => Math.max(1, page - 1))}
+                  disabled={currentPage <= 1}
+                >
+                  Previous
+                </Button>
+                <span className="text-sm text-gray-600 dark:text-gray-400">
+                  Page {currentPage} of {totalPages}
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setCurrentPage(page => Math.min(totalPages, page + 1))}
+                  disabled={currentPage >= totalPages}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
             </div>
           )}
         </div>

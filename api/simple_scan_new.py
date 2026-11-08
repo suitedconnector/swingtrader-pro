@@ -1,3 +1,4 @@
+import os
 import json
 import sys
 import pandas as pd
@@ -11,7 +12,7 @@ def get_return(prices, periods):
 
 def scan_all():
     cache = load_cache()
-    with open('/workspace/swingtrader-pro/api/tickers.json', 'r') as f:
+    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tickers.json'), 'r') as f:
         tickers = json.load(f)
     
     results = []
