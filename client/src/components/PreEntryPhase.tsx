@@ -3,8 +3,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { apiRequest } from '@/lib/queryClient';
-import type { PriceAlert, Watchlist } from '@shared/schema';
+import type { PriceAlert, Watchlist, ScanResult } from '@shared/schema';
 
 export function PreEntryPhase() {
   const queryClient = useQueryClient();
@@ -24,6 +25,14 @@ export function PreEntryPhase() {
     queryKey: ['/api/watchlists'],
   });
 
+  const { data: scanResults = [] } = useQuery<ScanResult[]>({
+    queryKey: ['/api/scan-results'],
+  });
+
+  const availableSymbols = Array.from(
+    new Set(scanResults.map(result => result.symbol))
+  ).filter(Boolean);
+
   const createAlertMutation = useMutation({
     mutationFn: (alertData: { symbol: string; targetPrice: string; alertType: string }) =>
       apiRequest('POST', '/api/price-alerts', {
@@ -34,6 +43,14 @@ export function PreEntryPhase() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/price-alerts'] });
       setAlertForm({ symbol: '', targetPrice: '', alertType: 'breakout' });
+    },
+  });
+
+  const deleteAlertMutation = useMutation({
+    mutationFn: (alertId: number) =>
+      apiRequest('DELETE', `/api/price-alerts/${alertId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/price-alerts'] });
     },
   });
 
@@ -77,11 +94,14 @@ export function PreEntryPhase() {
       if (response.ok && data.suggestedBreakout) {
         setAlertForm(prev => ({
           ...prev,
-          targetPrice: data.suggestedBreakout
+          targetPrice: data.suggestedBreakout.toString() // Ensure string for input
         }));
+      } else {
+        alert(data.message || 'Failed to fetch price data');
       }
     } catch (error) {
       console.error('Error fetching price:', error);
+      alert('Network error while fetching price');
     } finally {
       setIsLoadingPrice(false);
     }
@@ -165,20 +185,30 @@ export function PreEntryPhase() {
           <form onSubmit={handleCreateAlert} className="space-y-3">
             <div>
               <Label htmlFor="symbol">Stock Symbol</Label>
-              <div className="relative">
-                <Input
-                  id="symbol"
-                  value={alertForm.symbol}
-                  onChange={(e) => handleSymbolChange(e.target.value)}
-                  placeholder="e.g., NVDA"
-                  className="uppercase"
-                />
-                {isLoadingPrice && (
-                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-trading-primary"></div>
-                  </div>
-                )}
-              </div>
+              <Select
+                value={alertForm.symbol}
+                onValueChange={handleSymbolChange}
+                disabled={availableSymbols.length === 0}
+              >
+                <SelectTrigger id="symbol" className="w-full">
+                  <SelectValue placeholder="Choose a symbol from scan results" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableSymbols.map(symbol => (
+                    <SelectItem key={symbol} value={symbol}>
+                      {symbol}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {isLoadingPrice && (
+                <p className="text-xs text-gray-500 mt-1">Loading price...</p>
+              )}
+              {availableSymbols.length === 0 && (
+                <p className="text-xs text-gray-500 mt-1">
+                  Run a scan first to select a stock.
+                </p>
+              )}
             </div>
             <div>
               <Label htmlFor="targetPrice">Target Price ($)</Label>
@@ -226,7 +256,22 @@ export function PreEntryPhase() {
               <div key={alert.id} className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
                 <div className="flex justify-between items-center">
                   <span className="font-medium text-gray-900 dark:text-white">{alert.symbol}</span>
-                  <span className="text-xs text-gray-600 dark:text-gray-400 capitalize">{alert.alertType}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-600 dark:text-gray-400 capitalize">{alert.alertType}</span>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="sm"
+                      disabled={deleteAlertMutation.isPending}
+                      onClick={() => {
+                        if (window.confirm(`Delete the ${alert.symbol} price alert?`)) {
+                          deleteAlertMutation.mutate(alert.id);
+                        }
+                      }}
+                    >
+                      Delete
+                    </Button>
+                  </div>
                 </div>
                 <div className="text-sm text-gray-700 dark:text-gray-300">
                   Target: ${alert.targetPrice}

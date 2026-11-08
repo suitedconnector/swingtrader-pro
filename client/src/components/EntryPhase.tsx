@@ -5,15 +5,32 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { apiRequest } from '@/lib/queryClient';
+import { useToast } from '@/hooks/use-toast';
+import { Watchlist } from '@/../../shared/schema';
 import type { PositionCalculation, AccountSettings } from '@/lib/types';
 import type { Trade, Stock } from '@shared/schema';
 
 export function EntryPhase() {
   const queryClient = useQueryClient();
   const [accountSettings, setAccountSettings] = useState<AccountSettings>({
-    balance: 125486.32,
+    balance: 0,
     defaultRiskPercent: 1,
   });
+
+  const { data: userProfile } = useQuery<{ tradingBankroll: string }>({
+    queryKey: ['/api/profile'],
+  });
+
+  useEffect(() => {
+    if (userProfile?.tradingBankroll) {
+      setAccountSettings(prev => ({ 
+        ...prev, 
+        balance: parseFloat(userProfile.tradingBankroll) || 0 
+      }));
+    }
+  }, [userProfile]);
+
+  const { toast } = useToast();
 
   const [positionForm, setPositionForm] = useState({
     symbol: '',
@@ -44,7 +61,7 @@ export function EntryPhase() {
     queryKey: ['/api/trades', { active: true }],
   });
 
-  const { data: watchlists = [] } = useQuery({
+  const { data: watchlists } = useQuery<Watchlist[]>({
     queryKey: ['/api/watchlists'],
   });
 
@@ -53,7 +70,7 @@ export function EntryPhase() {
   });
 
   // Get all available symbols from both watchlists and stocks
-  const watchlistSymbols = watchlists.flatMap((wl: any) => wl.symbols || []);
+  const watchlistSymbols = watchlists?.flatMap(wl => wl.symbols || []) || [];
   const stockSymbols = stocks.map(stock => stock.symbol);
   const allSymbols = [...stockSymbols, ...watchlistSymbols];
   const availableStocks = Array.from(new Set(allSymbols)).filter(symbol => symbol && symbol.length > 0);
@@ -68,17 +85,11 @@ export function EntryPhase() {
       const priceData = await response.json();
       
       if (!response.ok || !priceData.currentPrice) {
-        throw new Error(`Unable to fetch price data for ${symbol}`);
+        throw new Error(priceData.message || `Unable to fetch price data for ${symbol}`);
       }
       
       const currentPrice = parseFloat(priceData.currentPrice);
-      // Use current price as both high and low if no intraday data available
-      const dayHigh = priceData.dayHigh ? parseFloat(priceData.dayHigh) : currentPrice * 1.02;
-      const dayLow = priceData.dayLow ? parseFloat(priceData.dayLow) : currentPrice * 0.98;
-      
-      // Calculate entry price: breakout above day high or 2% above current price
-      const breakoutEntry = Math.max(dayHigh * 1.01, currentPrice * 1.02);
-      const suggestedEntry = breakoutEntry;
+      const suggestedEntry = parseFloat(priceData.suggestedBreakout);
       
       // Calculate stop loss: 8% below entry (conservative swing trading rule)
       const suggestedStopLoss = suggestedEntry * 0.92;
@@ -87,7 +98,7 @@ export function EntryPhase() {
       const riskPerShare = suggestedEntry - suggestedStopLoss;
       const suggestedProfitTarget = suggestedEntry + (riskPerShare * 2);
       
-      let reasoning = `Entry: $${suggestedEntry.toFixed(2)} (breakout above $${currentPrice.toFixed(2)} current price). `;
+      let reasoning = `Entry: $${suggestedEntry.toFixed(2)} (breakout). `;
       reasoning += `Stop: $${suggestedStopLoss.toFixed(2)} (8% below entry). `;
       reasoning += `Target: $${suggestedProfitTarget.toFixed(2)} (2:1 risk/reward).`;
       
@@ -109,8 +120,13 @@ export function EntryPhase() {
         profitTarget: suggestedProfitTarget.toFixed(2)
       }));
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error calculating prices:', error);
+      toast({
+        title: "Calculation Error",
+        description: error.message || "Failed to calculate optimal prices",
+        variant: "destructive",
+      });
     } finally {
       setIsCalculatingPrices(false);
     }
@@ -234,7 +250,7 @@ export function EntryPhase() {
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Choose from watchlist" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent position="popper">
                   {availableStocks.map((symbol) => (
                     <SelectItem key={symbol} value={symbol}>
                       {symbol}

@@ -8,6 +8,7 @@ import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
+import { Watchlist } from '@/../../shared/schema';
 import TradingViewChart from './TradingViewChart';
 
 interface SetupAnalysis {
@@ -64,11 +65,11 @@ export function ChartSetupPhase() {
   const queryClient = useQueryClient();
 
   // Get watchlist stocks for analysis
-  const { data: watchlists } = useQuery({
+  const { data: watchlists } = useQuery<Watchlist[]>({
     queryKey: ['/api/watchlists'],
   });
 
-  const focusListStocks = watchlists?.find(w => w.type === 'focus')?.stocks || [];
+  const focusListStocks = watchlists?.find((w: Watchlist) => w.type === 'focus')?.symbols || [];
 
   // Setup analysis query
   const { data: setupAnalysis, isLoading: analysisLoading, error: analysisError } = useQuery<SetupAnalysis>({
@@ -84,14 +85,11 @@ export function ChartSetupPhase() {
 
   const addToWatchlistMutation = useMutation({
     mutationFn: async (symbol: string) => {
-      const focusList = watchlists?.find(w => w.type === 'focus');
+      const focusList = watchlists?.find((w: Watchlist) => w.type === 'focus');
       if (!focusList) throw new Error('Focus list not found');
       
-      const updatedStocks = [...(focusList.stocks || []), symbol];
-      return apiRequest(`/api/watchlists/${focusList.id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ stocks: updatedStocks }),
-      });
+      const updatedStocks = [...(focusList.symbols || []), symbol];
+      return apiRequest('PATCH', `/api/watchlists/${focusList.id}`, { stocks: updatedStocks });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/watchlists'] });
