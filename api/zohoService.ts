@@ -1,8 +1,8 @@
 import fetch from 'node-fetch';
 
-const ZOHO_CLIENT_ID = '1000.Q69KZUXSC9QV9A9QDAOZ59ZJ2ENCHW';
-const ZOHO_CLIENT_SECRET = 'c6bea20a04881fd255bd1dc797d08169a38dc1ea00';
-const REDIRECT_URI = 'https://54abc171-cf5d-47af-9ec5-f1e591f22432-00-2ufeg7whmct9g.worf.replit.dev/api/zoho/callback';
+const ZOHO_CLIENT_ID = process.env.ZOHO_CLIENT_ID || '';
+const ZOHO_CLIENT_SECRET = process.env.ZOHO_CLIENT_SECRET || '';
+const REDIRECT_URI = `${process.env.APP_DOMAIN}/api/zoho/callback`;
 
 interface PriceAlertEmailParams {
   to: string;
