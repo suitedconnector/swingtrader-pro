@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, decimal, timestamp, index } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, decimal, timestamp, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -14,8 +14,30 @@ export const users = pgTable("users", {
   tradingBankroll: decimal("trading_bankroll", { precision: 12, scale: 2 }).default("0.00"),
 }, (table) => {
   return {
-    emailIdx: index("users_email_lower_idx").on(sql`lower(${table.email})`),
+    emailIdx: uniqueIndex("users_email_lower_idx").on(sql`lower(${table.email})`),
   };
+});
+
+export const authCodes = pgTable("auth_codes", {
+  id: serial("id").primaryKey(),
+  email: text("email").notNull(),
+  code: text("code").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => {
+  return {
+    emailIdx: index("auth_codes_email_idx").on(table.email),
+  };
+});
+
+// Separate, one-time verification record for changing an account email.
+// One pending change per user; login codes remain in auth_codes.
+export const pendingEmailChanges = pgTable("pending_email_changes", {
+  userId: integer("user_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
+  email: text("email").notNull(),
+  codeDigest: text("code_digest").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 export const stocks = pgTable("stocks", {
@@ -96,7 +118,7 @@ export const registerUserSchema = createInsertSchema(users).pick({
 });
 
 export const updateUserProfileSchema = createInsertSchema(users).pick({
-  email: true,
+  username: true,
   emailAlerts: true,
   tradingBankroll: true,
 });

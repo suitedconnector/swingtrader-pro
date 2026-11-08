@@ -29,7 +29,12 @@ export function Sidebar() {
   const flaggedList = watchlists.find(w => w.type === 'flagged');
 
   const { data: userProfile } = useQuery({
-    queryKey: ['/api/profile/1'],
+    queryKey: ['/api/profile'],
+    queryFn: async () => {
+      const res = await fetch('/api/profile');
+      if (!res.ok) throw new Error('Failed to fetch profile');
+      return res.json();
+    },
   });
 
   // Calculate today's P&L from active trades using current market prices
@@ -65,7 +70,7 @@ export function Sidebar() {
             </div>
           </div>
           <div className="flex justify-between items-center">
-            <span className="text-sm text-gray-600 dark:text-gray-400">NASDAQ</span>
+            <span className="text-sm text-gray-600 dark:text-gray-400">QQQ (Nasdaq-100)</span>
             <div className="text-right">
               <div className="text-sm font-mono">{marketData?.nasdaq.price || 'Loading...'}</div>
               <div className={`text-xs ${marketData?.nasdaq.change?.startsWith('+') ? 'text-trading-success' : 'text-trading-error'}`}>
@@ -73,16 +78,7 @@ export function Sidebar() {
               </div>
             </div>
           </div>
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-gray-600 dark:text-gray-400">VIX</span>
-            <div className="text-right">
-              <div className="text-sm font-mono">{marketData?.vix.price || 'Loading...'}</div>
-              <div className={`text-xs ${marketData?.vix.change?.startsWith('-') ? 'text-trading-success' : 'text-trading-error'}`}>
-                {marketData?.vix.change || 'Loading...'}
-              </div>
-            </div>
-          </div>
-        </div>
+         </div>
         <div className="mt-3 p-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
           <div className="flex items-center text-sm text-trading-success">
             <i className="fas fa-check-circle mr-2"></i>

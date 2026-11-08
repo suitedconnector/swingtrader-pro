@@ -9,7 +9,6 @@ export interface TradingPhase {
 export interface MarketData {
   spy: { price: string; change: string };
   nasdaq: { price: string; change: string };
-  vix: { price: string; change: string };
   trend: string;
 }
 

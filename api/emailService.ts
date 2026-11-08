@@ -25,7 +25,7 @@ export async function sendPriceAlertEmail(params: PriceAlertEmailParams): Promis
   try {
     const { to, symbol, currentPrice, targetPrice, alertType, changePercent } = params;
     
-    const subject = `🚨 ${symbol} ${alertType.toUpperCase()} Alert - $${currentPrice}`;
+    const subject = `SwingTrader 🚨 ${symbol} ${alertType.toUpperCase()} Alert - $${currentPrice}`;
     
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -133,4 +133,71 @@ export async function sendTestAlert(email: string): Promise<boolean> {
     alertType: 'breakout',
     changePercent: 2.1
   });
+}
+
+export async function sendVerificationCode(email: string, code: string): Promise<boolean> {
+  if (!isEmailEnabled || !mailjet) {
+    console.log('Email service disabled - MAILJET_API_KEY or MAILJET_SECRET_KEY not configured');
+    return false;
+  }
+
+  try {
+    const request = mailjet.post('send', { version: 'v3.1' }).request({
+      Messages: [
+        {
+          From: { Email: 'alerts@trezian.com', Name: 'Trezian Trading' },
+          To: [{ Email: email, Name: 'Trader' }],
+          Subject: 'Your Login Verification Code',
+          TextPart: `Your verification code is: ${code}. It expires in 10 minutes.`,
+          HTMLPart: `
+            <div style="font-family: Arial, sans-serif; padding: 20px;">
+              <h2>Verification Code</h2>
+              <p>Your login code is: <strong>${code}</strong></p>
+              <p>This code expires in 10 minutes.</p>
+            </div>
+          `
+        }
+      ]
+    });
+    await request;
+    return true;
+  } catch (error) {
+    console.error('Email verification error:', error);
+    return false;
+  }
+}
+
+export async function sendEmailChangeVerificationCode(email: string, code: string): Promise<boolean> {
+  if (!isEmailEnabled || !mailjet) {
+    console.log('Email service disabled - MAILJET_API_KEY or MAILJET_SECRET_KEY not configured');
+    return false;
+  }
+
+  try {
+    const request = mailjet.post('send', { version: 'v3.1' }).request({
+      Messages: [
+        {
+          From: { Email: 'alerts@trezian.com', Name: 'Trezian Trading' },
+          To: [{ Email: email, Name: 'Trader' }],
+          Subject: 'Verify your SwingTrader Pro email address',
+          TextPart: `Your email-change verification code is: ${code}. It expires in 10 minutes. If you did not request this change, you can ignore this email.`,
+          HTMLPart: `
+            <div style="font-family: Arial, sans-serif; padding: 20px;">
+              <h2>Verify Your New Email Address</h2>
+              <p>Enter this code in SwingTrader Pro to confirm your new email address:</p>
+              <p style="font-size: 28px; font-weight: bold; letter-spacing: 5px;">${code}</p>
+              <p>This code expires in 10 minutes.</p>
+              <p>If you did not request this change, you can ignore this email.</p>
+            </div>
+          `
+        }
+      ]
+    });
+
+    await request;
+    return true;
+  } catch (error) {
+    console.error('Email-change verification error:', error);
+    return false;
+  }
 }

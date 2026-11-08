@@ -1,9 +1,5 @@
-import { useState } from 'react';
-import { Link } from 'wouter';
-import { useQuery, useMutation } from '@tanstack/react-query';
-import { apiRequest } from '@/lib/queryClient';
-import { useToast } from '@/hooks/use-toast';
-import { useThemeContext } from './ThemeProvider';
+import { useState } from "react";
+import { Navbar } from './Navbar';
 import { PhaseSelector } from './PhaseSelector';
 import { ScanningPhase } from './ScanningPhase';
 import { ChartSetupPhase } from './ChartSetupPhase';
@@ -24,34 +20,7 @@ const TRADING_PHASES: TradingPhase[] = [
 ];
 
 export function TradingDashboard() {
-  const { theme, toggleTheme } = useThemeContext();
   const [currentPhase, setCurrentPhase] = useState(1);
-  const userId = 1; // For now, using default user ID
-  const { toast } = useToast();
-
-  // Test email mutation
-  const testEmailMutation = useMutation({
-    mutationFn: () => apiRequest('POST', '/api/test-email', { email: 'tfrei320@gmail.com' }),
-    onSuccess: () => {
-      toast({
-        title: "Test Email Sent!",
-        description: "Check your inbox at tfrei320@gmail.com for a sample trading alert.",
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Email Test Failed",
-        description: error.message || "Failed to send test email",
-        variant: "destructive",
-      });
-    },
-  });
-  
-  // Fetch user profile to get account balance
-  const { data: userProfile } = useQuery({
-    queryKey: ['/api/profile', userId],
-    queryFn: () => fetch(`/api/profile/${userId}`).then(res => res.json()),
-  });
 
   const renderPhaseContent = () => {
     switch (currentPhase) {
@@ -74,67 +43,7 @@ export function TradingDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-dark-bg text-gray-900 dark:text-gray-100 transition-colors duration-200">
-      {/* Navigation Header */}
-      <nav className="bg-white dark:bg-dark-surface shadow-sm border-b border-gray-200 dark:border-dark-border">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2">
-                <i className="fas fa-chart-line text-trading-primary text-xl"></i>
-                <h1 className="text-xl font-bold text-gray-900 dark:text-white">SwingTrader Pro</h1>
-              </div>
-              <div className="hidden md:flex items-center space-x-1">
-                <button className="px-4 py-2 text-sm font-medium text-trading-primary bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                  Dashboard
-                </button>
-                <button className="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg">
-                  Watchlists
-                </button>
-                <button className="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg">
-                  Trade Journal
-                </button>
-                <button className="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg">
-                  Analytics
-                </button>
-              </div>
-            </div>
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2 text-sm">
-                <span className="text-gray-600 dark:text-gray-400">Trading Bankroll:</span>
-                <span className="font-mono font-medium text-trading-success">
-                  ${userProfile?.tradingBankroll || '0.00'}
-                </span>
-              </div>
-              <button 
-                onClick={() => testEmailMutation.mutate()}
-                disabled={testEmailMutation.isPending}
-                className="bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white px-3 py-2 rounded-lg font-medium transition-colors text-sm"
-              >
-                {testEmailMutation.isPending ? 'Sending...' : 'Test Email'}
-              </button>
-              <Link href="/register">
-                <button className="px-4 py-2 text-sm font-medium text-white bg-trading-primary hover:bg-blue-600 rounded-lg transition-colors">
-                  <i className="fas fa-user-plus mr-2"></i>
-                  Register
-                </button>
-              </Link>
-              <button 
-                onClick={toggleTheme}
-                className="p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
-              >
-                {theme === 'light' ? (
-                  <i className="fas fa-moon"></i>
-                ) : (
-                  <i className="fas fa-sun"></i>
-                )}
-              </button>
-              <button className="p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg">
-                <i className="fas fa-cog"></i>
-              </button>
-            </div>
-          </div>
-        </div>
-      </nav>
+      <Navbar />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <PhaseSelector 

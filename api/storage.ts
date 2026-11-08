@@ -1,9 +1,8 @@
-import { 
-  users, stocks, watchlists, trades, priceAlerts, scanResults,
+import { authCodes, pendingEmailChanges, users, stocks, watchlists, trades, priceAlerts, scanResults,
   type User, type InsertUser, type Stock, type InsertStock,
   type Watchlist, type InsertWatchlist, type Trade, type InsertTrade,
   type PriceAlert, type InsertPriceAlert, type ScanResult, type InsertScanResult
-} from "@shared/schema";
+} from "../shared/schema";
 import { db } from "./db";
 import { eq, sql, and } from "drizzle-orm";
 
@@ -12,7 +11,7 @@ export interface IStorage {
   getUserByUsername(username: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
-  updateUserProfile(id: number, updates: { email?: string; emailAlerts?: boolean; tradingBankroll?: string }): Promise<User | undefined>;
+  updateUserProfile(id: number, updates: { username?: string; emailAlerts?: boolean; tradingBankroll?: string }): Promise<User | undefined>;
   updateUserPassword(id: number, passwordHash: string): Promise<void>;
   getStocks(): Promise<Stock[]>;
   getStock(symbol: string): Promise<Stock | undefined>;
@@ -32,9 +31,16 @@ export interface IStorage {
   getActivePriceAlerts(userId: number): Promise<PriceAlert[]>;
   createPriceAlert(alert: InsertPriceAlert): Promise<PriceAlert>;
   updatePriceAlert(id: number, userId: number, updates: Partial<InsertPriceAlert>): Promise<PriceAlert | undefined>;
+  deletePriceAlert(id: number, userId: number): Promise<boolean>;
   getScanResults(): Promise<ScanResult[]>;
   getScanResultsByType(scanType: string): Promise<ScanResult[]>;
   createScanResult(result: InsertScanResult): Promise<ScanResult>;
+  saveAuthCode(email: string, code: string): Promise<void>;
+  verifyAuthCode(email: string, code: string): Promise<boolean>;
+  deleteAuthCode(email: string): Promise<void>;
+  savePendingEmailChange(userId: number, email: string, codeDigest: string): Promise<void>;
+  completePendingEmailChange(userId: number, codeDigest: string): Promise<string | null>;
+  deletePendingEmailChange(userId: number): Promise<void>;
   clearOldScanResults(): Promise<void>;
 }
 
@@ -56,7 +62,7 @@ export class DatabaseStorage implements IStorage {
     const [user] = await db.insert(users).values(insertUser).returning();
     return user;
   }
-  async updateUserProfile(id: number, updates: { email?: string; emailAlerts?: boolean; tradingBankroll?: string }): Promise<User | undefined> {
+  async updateUserProfile(id: number, updates: { username?: string; emailAlerts?: boolean; tradingBankroll?: string }): Promise<User | undefined> {
     const [user] = await db.update(users).set(updates).where(eq(users.id, id)).returning();
     return user || undefined;
   }
@@ -129,6 +135,12 @@ export class DatabaseStorage implements IStorage {
     const [alert] = await db.update(priceAlerts).set(updates).where(and(eq(priceAlerts.id, id), eq(priceAlerts.userId, userId))).returning();
     return alert || undefined;
   }
+  async deletePriceAlert(id: number, userId: number): Promise<boolean> {
+    const deleted = await db.delete(priceAlerts)
+      .where(and(eq(priceAlerts.id, id), eq(priceAlerts.userId, userId)))
+      .returning({ id: priceAlerts.id });
+    return deleted.length > 0;
+  }
   async getScanResults(): Promise<ScanResult[]> {
     return await db.select().from(scanResults);
   }
@@ -139,6 +151,77 @@ export class DatabaseStorage implements IStorage {
     const [result] = await db.insert(scanResults).values(insertResult).returning();
     return result;
   }
+  async saveAuthCode(email: string, code: string): Promise<void> {
+    await db.insert(authCodes).values({
+      email,
+      code,
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+    });
+  }
+
+  async verifyAuthCode(email: string, code: string): Promise<boolean> {
+    return await db.transaction(async (tx) => {
+      const [result] = await tx.delete(authCodes)
+        .where(and(eq(authCodes.email, email), eq(authCodes.code, code)))
+        .returning();
+      
+      if (!result || result.expiresAt < new Date()) return false;
+      return true;
+    });
+  }
+
+  async deleteAuthCode(email: string): Promise<void> {
+    await db.delete(authCodes).where(eq(authCodes.email, email));
+  }
+
+  async savePendingEmailChange(userId: number, email: string, codeDigest: string): Promise<void> {
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    await db.insert(pendingEmailChanges).values({
+      userId,
+      email,
+      codeDigest,
+      expiresAt,
+    }).onConflictDoUpdate({
+      target: pendingEmailChanges.userId,
+      set: {
+        email,
+        codeDigest,
+        expiresAt,
+        createdAt: new Date(),
+      },
+    });
+  }
+
+  async completePendingEmailChange(userId: number, codeDigest: string): Promise<string | null> {
+    return await db.transaction(async (tx) => {
+      const [pending] = await tx.select()
+        .from(pendingEmailChanges)
+        .where(eq(pendingEmailChanges.userId, userId))
+        .for("update");
+
+      if (!pending || pending.expiresAt < new Date() || pending.codeDigest !== codeDigest) {
+        return null;
+      }
+
+      const [updatedUser] = await tx.update(users)
+        .set({ email: pending.email })
+        .where(eq(users.id, userId))
+        .returning({ email: users.email });
+
+      if (!updatedUser) return null;
+
+      await tx.delete(pendingEmailChanges)
+        .where(eq(pendingEmailChanges.userId, userId));
+
+      return updatedUser.email;
+    });
+  }
+
+  async deletePendingEmailChange(userId: number): Promise<void> {
+    await db.delete(pendingEmailChanges)
+      .where(eq(pendingEmailChanges.userId, userId));
+  }
+
   async clearOldScanResults(): Promise<void> {
     await db.delete(scanResults);
   }

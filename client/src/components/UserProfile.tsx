@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
-import { User, Mail, Phone, Bell, BellOff } from 'lucide-react';
+import { User, Mail, Bell } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 
@@ -21,66 +21,119 @@ interface UserProfileData {
 export function UserProfile() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const userId = 1; // For now, using default user ID
 
+  const [username, setUsername] = useState('');
   const [formData, setFormData] = useState({
-    email: '',
     emailAlerts: true,
     tradingBankroll: '',
   });
+  const [newEmail, setNewEmail] = useState('');
+  const [verificationCode, setVerificationCode] = useState('');
+  const [codeSent, setCodeSent] = useState(false);
 
-  const { data: profile, isLoading } = useQuery({
-    queryKey: ['/api/profile', userId],
-    queryFn: () => fetch(`/api/profile/${userId}`).then(res => res.json()) as Promise<UserProfileData>,
-    onSuccess: (data) => {
-      setFormData({
-        email: data.email || '',
-        phone: data.phone || '',
-        emailAlerts: data.emailAlerts,
-        smsAlerts: data.smsAlerts,
-      });
-    }
+  const { data: profile, isLoading } = useQuery<UserProfileData>({
+    queryKey: ['/api/profile'],
+    queryFn: async () => {
+      const res = await fetch('/api/profile');
+      if (!res.ok) throw new Error('Failed to fetch profile');
+      return res.json();
+    },
   });
 
+  useEffect(() => {
+    if (profile) {
+      setUsername(profile.username || '');
+      setFormData({
+        emailAlerts: profile.emailAlerts,
+        tradingBankroll: profile.tradingBankroll || '',
+      });
+    }
+  }, [profile]);
+
+  const refreshProfile = () =>
+    queryClient.invalidateQueries({ queryKey: ['/api/profile'] });
+
   const updateProfileMutation = useMutation({
-    mutationFn: (updates: Partial<UserProfileData>) =>
-      apiRequest(`/api/profile/${userId}`, {
-        method: 'PATCH',
-        body: JSON.stringify(updates),
-      }),
+    mutationFn: (updates: {
+      username?: string;
+      emailAlerts?: boolean;
+      tradingBankroll?: string;
+    }) => apiRequest('PATCH', '/api/profile', updates),
     onSuccess: () => {
       toast({
-        title: "Profile Updated",
-        description: "Your notification preferences have been saved successfully.",
+        title: 'Profile Updated',
+        description: 'Your profile settings have been saved.',
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/profile', userId] });
+      refreshProfile();
     },
     onError: () => {
       toast({
-        title: "Update Failed",
-        description: "There was an error updating your profile. Please try again.",
-        variant: "destructive",
+        title: 'Update Failed',
+        description: 'There was an error updating your profile. Please try again.',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const requestEmailCodeMutation = useMutation({
+    mutationFn: () =>
+      apiRequest('POST', '/api/profile/email/request', {
+        email: newEmail.trim(),
+      }),
+    onSuccess: () => {
+      setCodeSent(true);
+      setVerificationCode('');
+      toast({
+        title: 'Verification Code Sent',
+        description: 'Check your new email address for the six-digit code.',
+      });
+    },
+    onError: () => {
+      toast({
+        title: 'Unable to Send Code',
+        description: 'Check the email address and try again.',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const verifyEmailMutation = useMutation({
+    mutationFn: () =>
+      apiRequest('POST', '/api/profile/email/verify', {
+        code: verificationCode.trim(),
+      }),
+    onSuccess: () => {
+      setNewEmail('');
+      setVerificationCode('');
+      setCodeSent(false);
+      toast({
+        title: 'Email Address Updated',
+        description: 'Your new email address has been verified.',
+      });
+      refreshProfile();
+    },
+    onError: () => {
+      toast({
+        title: 'Verification Failed',
+        description: 'The code may be incorrect or expired. Please try again.',
+        variant: 'destructive',
       });
     },
   });
 
   const testEmailMutation = useMutation({
-    mutationFn: (email: string) =>
-      apiRequest('/api/test-email-alert', {
-        method: 'POST',
-        body: JSON.stringify({ email }),
-      }),
+    mutationFn: () => apiRequest('POST', '/api/test-email-alert'),
     onSuccess: () => {
       toast({
-        title: "Test Alert Sent!",
-        description: "Check your email for a sample price breakout alert.",
+        title: 'Test Alert Sent!',
+        description: 'Check your account email for the sample alert.',
       });
     },
     onError: () => {
       toast({
-        title: "Test Failed",
-        description: "Couldn't send test alert. Make sure you have a valid email address.",
-        variant: "destructive",
+        title: 'Test Failed',
+        description: 'Could not send the test alert. Please try again.',
+        variant: 'destructive',
       });
     },
   });
@@ -90,18 +143,15 @@ export function UserProfile() {
     updateProfileMutation.mutate(formData);
   };
 
-  const getCarrierInfo = () => {
-    return (
-      <div className="text-sm text-muted-foreground space-y-1">
-        <p className="font-medium">SMS Gateway Format Examples:</p>
-        <div className="grid grid-cols-1 gap-1 text-xs">
-          <p>• Verizon: 5551234567@vtext.com</p>
-          <p>• AT&T: 5551234567@txt.att.net</p>
-          <p>• T-Mobile: 5551234567@tmomail.net</p>
-          <p>• Sprint: 5551234567@messaging.sprintpcs.com</p>
-        </div>
-      </div>
-    );
+  const handleUsernameBlur = () => {
+    const cleanedUsername = username.trim();
+
+    if (!cleanedUsername || cleanedUsername === profile?.username) {
+      setUsername(profile?.username || '');
+      return;
+    }
+
+    updateProfileMutation.mutate({ username: cleanedUsername });
   };
 
   if (isLoading) {
@@ -132,93 +182,146 @@ export function UserProfile() {
           User Profile
         </CardTitle>
         <CardDescription>
-          Configure your contact information and notification preferences for price alerts
+          Configure your account information and notification preferences
         </CardDescription>
       </CardHeader>
+
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* User Info */}
           <div className="space-y-2">
-            <Label className="text-sm font-medium">Username</Label>
-            <Input value={profile?.username || ''} disabled className="bg-muted" />
+            <Label htmlFor="username">Username</Label>
+            <Input
+              id="username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              onBlur={handleUsernameBlur}
+              placeholder="Your username"
+            />
+            <p className="text-sm text-muted-foreground">
+              Your username is saved when you leave this field.
+            </p>
           </div>
 
           <Separator />
 
-          {/* Contact Information */}
           <div className="space-y-4">
             <h3 className="text-lg font-medium">Contact Information</h3>
-            
+
             <div className="space-y-2">
-              <Label htmlFor="email" className="flex items-center gap-2">
+              <Label className="flex items-center gap-2">
                 <Mail className="h-4 w-4" />
-                Email Address
+                Current Verified Email
               </Label>
               <Input
-                id="email"
-                type="email"
-                placeholder="your.email@example.com"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                value={profile?.email || ''}
+                disabled
+                className="bg-muted"
               />
               <p className="text-sm text-muted-foreground">
-                Used for price alert notifications and account updates
+                This is the email address currently associated with your account.
               </p>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="phone" className="flex items-center gap-2">
-                <Phone className="h-4 w-4" />
-                Phone Number (SMS Gateway)
-              </Label>
+              <Label htmlFor="newEmail">Change Email Address</Label>
               <Input
-                id="phone"
-                type="text"
-                placeholder="5551234567@vtext.com"
-                value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                id="newEmail"
+                type="email"
+                placeholder="Enter your new email address"
+                value={newEmail}
+                disabled={codeSent}
+                onChange={(e) => setNewEmail(e.target.value)}
               />
-              <div className="space-y-2">
-                <p className="text-sm text-muted-foreground">
-                  Enter your phone number with carrier email gateway for SMS alerts
-                </p>
-                {getCarrierInfo()}
-              </div>
+
+              {!codeSent ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  disabled={!newEmail.trim() || requestEmailCodeMutation.isPending}
+                  onClick={() => requestEmailCodeMutation.mutate()}
+                >
+                  {requestEmailCodeMutation.isPending
+                    ? 'Sending Code...'
+                    : 'Send Verification Code'}
+                </Button>
+              ) : (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    Enter the six-digit code sent to your new email address.
+                    Your current email remains active until verification succeeds.
+                  </p>
+                  <Input
+                    id="verificationCode"
+                    inputMode="numeric"
+                    maxLength={6}
+                    placeholder="Six-digit verification code"
+                    value={verificationCode}
+                    onChange={(e) =>
+                      setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))
+                    }
+                  />
+                  <Button
+                    type="button"
+                    className="w-full"
+                    disabled={
+                      verificationCode.length !== 6 ||
+                      verifyEmailMutation.isPending
+                    }
+                    onClick={() => verifyEmailMutation.mutate()}
+                  >
+                    {verifyEmailMutation.isPending
+                      ? 'Verifying...'
+                      : 'Verify New Email'}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="w-full"
+                    onClick={() => {
+                      setCodeSent(false);
+                      setVerificationCode('');
+                    }}
+                  >
+                    Cancel Email Change
+                  </Button>
+                </>
+              )}
             </div>
           </div>
 
           <Separator />
 
-          {/* Account Settings */}
           <div className="space-y-4">
             <h3 className="text-lg font-medium">Account Settings</h3>
-            
+
             <div className="space-y-2">
-              <Label htmlFor="accountBalance" className="flex items-center gap-2">
-                <i className="fas fa-dollar-sign h-4 w-4"></i>
-                Account Balance
-              </Label>
+              <Label htmlFor="accountBalance">Account Balance</Label>
               <Input
                 id="accountBalance"
                 type="number"
                 step="0.01"
                 min="0"
                 placeholder="0.00"
-                value={formData.accountBalance || ''}
-                onChange={(e) => setFormData({ ...formData, accountBalance: e.target.value })}
+                value={formData.tradingBankroll}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    tradingBankroll: e.target.value,
+                  })
+                }
               />
               <p className="text-sm text-muted-foreground">
-                Your trading account balance for position sizing calculations
+                Your trading account balance for position sizing calculations.
               </p>
             </div>
           </div>
 
           <Separator />
 
-          {/* Notification Preferences */}
           <div className="space-y-4">
             <h3 className="text-lg font-medium">Notification Preferences</h3>
-            
+
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Bell className="h-4 w-4" />
@@ -227,26 +330,14 @@ export function UserProfile() {
               <Switch
                 id="email-alerts"
                 checked={formData.emailAlerts}
-                onCheckedChange={(checked) => setFormData({ ...formData, emailAlerts: checked })}
+                onCheckedChange={(checked) =>
+                  setFormData({ ...formData, emailAlerts: checked })
+                }
               />
             </div>
-            <p className="text-sm text-muted-foreground ml-6">
-              Receive price breakout alerts via email
-            </p>
 
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Phone className="h-4 w-4" />
-                <Label htmlFor="sms-alerts">SMS Alerts</Label>
-              </div>
-              <Switch
-                id="sms-alerts"
-                checked={formData.smsAlerts}
-                onCheckedChange={(checked) => setFormData({ ...formData, smsAlerts: checked })}
-              />
-            </div>
             <p className="text-sm text-muted-foreground ml-6">
-              Receive price breakout alerts via SMS (requires phone number above)
+              Receive price breakout alerts via email.
             </p>
           </div>
 
@@ -256,18 +347,20 @@ export function UserProfile() {
               className="w-full"
               disabled={updateProfileMutation.isPending}
             >
-              {updateProfileMutation.isPending ? "Saving..." : "Save Profile"}
+              {updateProfileMutation.isPending ? 'Saving...' : 'Save Profile'}
             </Button>
-            
-            {formData.email && (
+
+            {profile?.email && (
               <Button
                 type="button"
                 variant="outline"
                 className="w-full"
                 disabled={testEmailMutation.isPending}
-                onClick={() => testEmailMutation.mutate(formData.email)}
+                onClick={() => testEmailMutation.mutate()}
               >
-                {testEmailMutation.isPending ? "Sending..." : "📧 Send Test Alert"}
+                {testEmailMutation.isPending
+                  ? 'Sending...'
+                  : '📧 Send Test Alert'}
               </Button>
             )}
           </div>
