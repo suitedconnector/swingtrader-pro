@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowUp, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { apiRequest } from '@/lib/queryClient';
-import type { Watchlist } from '@shared/schema';
+import type { PriceAlert, Watchlist } from '@shared/schema';
 import TradingViewChart from '@/components/TradingViewChart';
 import { useThemeContext } from '@/components/ThemeProvider';
 import { AccentBar, EmptyState, PageHeader, Section } from '@/components/layout/primitives';
@@ -14,6 +14,19 @@ type ListType = 'focus' | 'flagged';
 
 const LIST_NAMES: Record<ListType, string> = { focus: 'Focus List', flagged: 'Flagged List' };
 const SYMBOL_PATTERN = /^[A-Z][A-Z0-9.-]{0,9}$/;
+
+interface StockPrice {
+  symbol: string;
+  currentPrice: string;
+  suggestedBreakout: string;
+}
+
+const fmt = (v: string | number | null | undefined) => {
+  const n = Number(v);
+  return v === null || v === undefined || v === '' || !Number.isFinite(n) ? '—' : n.toFixed(2);
+};
+
+const numCol = 'w-16 shrink-0 text-right font-mono tabular-nums';
 
 export default function Watchlists() {
   const queryClient = useQueryClient();
@@ -28,6 +41,26 @@ export default function Watchlists() {
   const others = watchlists.filter((w) => w.type !== 'focus' && w.type !== 'flagged');
   const allSymbols = watchlists.flatMap((w) => w.symbols ?? []);
   const chartSymbol = selected ?? focus?.symbols[0] ?? flagged?.symbols[0] ?? allSymbols[0] ?? null;
+
+  // Breakout alerts you set on the Alerts page. With several for one symbol, show the lowest.
+  const { data: alerts = [] } = useQuery<PriceAlert[]>({ queryKey: ['/api/price-alerts'] });
+  const alertPrice = new Map<string, number>();
+  for (const a of alerts) {
+    const target = Number(a.targetPrice);
+    if (!a.isActive || a.alertType !== 'breakout' || !Number.isFinite(target)) continue;
+    const prev = alertPrice.get(a.symbol);
+    if (prev === undefined || target < prev) alertPrice.set(a.symbol, target);
+  }
+
+  // Last close and suggested breakout, one lookup per symbol (cached for the session).
+  const uniqueSymbols = Array.from(new Set(allSymbols));
+  const priceResults = useQueries({
+    queries: uniqueSymbols.map((s) => ({ queryKey: [`/api/stock-price/${s}`] })),
+  });
+  const prices = new Map<string, { data?: StockPrice; isLoading: boolean }>();
+  uniqueSymbols.forEach((s, i) =>
+    prices.set(s, { data: priceResults[i]?.data as StockPrice | undefined, isLoading: priceResults[i]?.isLoading ?? false })
+  );
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['/api/watchlists'] });
 
@@ -87,21 +120,50 @@ export default function Watchlists() {
           </p>
         ) : (
           <ul className="divide-y divide-border/60">
+            <li className="flex items-center gap-2 pb-2 text-xs uppercase tracking-wider text-muted-foreground" aria-hidden="true">
+              <span className="flex-1" />
+              <span className={cn(numCol, 'font-sans')}>Close</span>
+              <span className={cn(numCol, 'font-sans')}>Breakout</span>
+              {type === 'flagged' && (
+                // Invisible copy of the row's Focus button, so the column labels line up.
+                <Button size="sm" variant="ghost" className="invisible h-7 px-2 text-xs" tabIndex={-1}>
+                  <ArrowUp />
+                  Focus
+                </Button>
+              )}
+              {list && <span className="w-7 shrink-0" />}
+            </li>
             {symbols.map((symbol) => {
               const active = symbol === chartSymbol;
+              const price = prices.get(symbol);
+              const myAlert = alertPrice.get(symbol);
+              const close = price?.isLoading ? '…' : fmt(price?.data?.currentPrice);
+              const breakout = price?.isLoading ? '…' : fmt(price?.data?.suggestedBreakout);
               return (
                 <li key={symbol} className="group flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => setSelected(symbol)}
                     aria-pressed={active}
+                    aria-label={`${symbol}: close ${close}, suggested breakout ${breakout}${
+                      myAlert !== undefined ? `, your breakout alert ${myAlert.toFixed(2)}` : ''
+                    }`}
                     className={cn(
-                      'flex flex-1 items-center gap-3 py-2.5 text-left text-sm transition-colors',
+                      'flex min-w-0 flex-1 items-center gap-2 py-2.5 text-left text-sm transition-colors',
                       active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
                     )}
                   >
-                    <AccentBar signal="info" orientation="vertical" className={active ? '' : 'opacity-0'} />
-                    <span className="font-medium">{symbol}</span>
+                    <span className="flex min-w-0 flex-1 items-center gap-3">
+                      <AccentBar signal="info" orientation="vertical" className={active ? '' : 'opacity-0'} />
+                      <span className="min-w-0">
+                        <span className="block font-medium">{symbol}</span>
+                        {myAlert !== undefined && (
+                          <span className="block text-xs text-signal-warn">Alert {myAlert.toFixed(2)}</span>
+                        )}
+                      </span>
+                    </span>
+                    <span className={cn(numCol, 'text-muted-foreground')}>{close}</span>
+                    <span className={cn(numCol, 'text-foreground')}>{breakout}</span>
                   </button>
                   {type === 'flagged' && (
                     <Button
