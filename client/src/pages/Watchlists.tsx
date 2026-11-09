@@ -158,7 +158,7 @@ export default function Watchlists() {
                 id="add-symbol"
                 value={newSymbol}
                 onChange={(e) => setNewSymbol(e.target.value.toUpperCase())}
-                placeholder="Add symbol, e.g. AAPL"
+                placeholder="Add a symbol"
                 autoComplete="off"
                 className="border-0 bg-muted font-mono"
               />
