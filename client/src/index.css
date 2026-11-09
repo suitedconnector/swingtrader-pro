@@ -51,15 +51,6 @@
   --sidebar-accent-foreground: 0 0% 9%;
   --sidebar-border: 0 0% 92%;
   --sidebar-ring: var(--signal-info);
-
-  /* Legacy trading tokens, mapped onto the signal accents */
-  --trading-primary: var(--signal-info);
-  --trading-success: var(--signal-up);
-  --trading-error: var(--signal-down);
-  --trading-warning: var(--signal-warn);
-  --dark-bg: 0 0% 4%;
-  --dark-surface: 0 0% 7%;
-  --dark-border: 0 0% 15%;
 }
 
 .dark {
@@ -95,10 +86,6 @@
   --sidebar-accent: 0 0% 10%;
   --sidebar-accent-foreground: 0 0% 93%;
   --sidebar-border: 0 0% 12%;
-
-  --dark-bg: 0 0% 4%;
-  --dark-surface: 0 0% 7%;
-  --dark-border: 0 0% 15%;
 }
 
 @layer base {
@@ -112,55 +99,5 @@
 
   body {
     @apply font-sans antialiased bg-background text-foreground;
-  }
-}
-
-@layer utilities {
-  .text-trading-primary {
-    color: hsl(var(--trading-primary));
-  }
-
-  .text-trading-success {
-    color: hsl(var(--trading-success));
-  }
-
-  .text-trading-error {
-    color: hsl(var(--trading-error));
-  }
-
-  .text-trading-warning {
-    color: hsl(var(--trading-warning));
-  }
-
-  .bg-trading-primary {
-    background-color: hsl(var(--trading-primary));
-  }
-
-  .bg-trading-success {
-    background-color: hsl(var(--trading-success));
-  }
-
-  .bg-trading-error {
-    background-color: hsl(var(--trading-error));
-  }
-
-  .bg-trading-warning {
-    background-color: hsl(var(--trading-warning));
-  }
-
-  .bg-dark-bg {
-    background-color: hsl(var(--dark-bg));
-  }
-
-  .bg-dark-surface {
-    background-color: hsl(var(--dark-surface));
-  }
-
-  .border-dark-border {
-    border-color: hsl(var(--dark-border));
-  }
-
-  .border-trading-primary {
-    border-color: hsl(var(--trading-primary));
   }
 }
