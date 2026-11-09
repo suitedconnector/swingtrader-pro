@@ -4,3 +4,28 @@ dist
 server/public
 vite.config.ts.*
 *.tar.gz
+.env.production
+
+.env
+.env.*
+!.env.example
+
+# Local backup copies and editor leftovers
+*.bak
+*.backup
+*.backup-*
+*.before-*
+*.profile-backup
+*.phase2-backup
+*.pre-*
+*.safety-backup
+*.save
+
+# Python bytecode, caches and logs
+__pycache__/
+data/cache/
+*.log
+
+# Runtime user data (never commit)
+data/users.json
+data/watchlists.json

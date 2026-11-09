@@ -1,4 +1,5 @@
 import type { Config } from "tailwindcss";
+import colors from "tailwindcss/colors";
 
 export default {
   darkMode: ["class"],
@@ -11,6 +12,9 @@ export default {
         sm: "calc(var(--radius) - 4px)",
       },
       colors: {
+        // Tailwind's default gray is a cool slate; use true neutral grays so
+        // existing gray-* classes match the black/charcoal palette.
+        gray: colors.neutral,
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
         card: {
@@ -40,6 +44,12 @@ export default {
         destructive: {
           DEFAULT: "hsl(var(--destructive))",
           foreground: "hsl(var(--destructive-foreground))",
+        },
+        signal: {
+          up: "hsl(var(--signal-up))",
+          down: "hsl(var(--signal-down))",
+          info: "hsl(var(--signal-info))",
+          warn: "hsl(var(--signal-warn))",
         },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",

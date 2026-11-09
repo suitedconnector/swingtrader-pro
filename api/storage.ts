@@ -1,520 +1,248 @@
-import { 
-  users, stocks, watchlists, trades, priceAlerts, scanResults,
+import { authCodes, pendingEmailChanges, users, stocks, watchlists, trades, priceAlerts, scanResults,
   type User, type InsertUser, type Stock, type InsertStock,
   type Watchlist, type InsertWatchlist, type Trade, type InsertTrade,
   type PriceAlert, type InsertPriceAlert, type ScanResult, type InsertScanResult
-} from "@shared/schema";
+} from "../shared/schema";
+import { db } from "./db";
+import { eq, sql, and } from "drizzle-orm";
+
+// InsertTrade omits exitDate; closing a trade must be able to set it.
+export type TradeUpdate = Partial<InsertTrade> & { exitDate?: Date | null };
 
 export interface IStorage {
-  // User methods
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
-  updateUserProfile(id: number, updates: { email?: string; emailAlerts?: boolean; tradingBankroll?: string }): Promise<User | undefined>;
-
-  // Stock methods
+  updateUserProfile(id: number, updates: { username?: string; emailAlerts?: boolean; tradingBankroll?: string }): Promise<User | undefined>;
+  updateUserPassword(id: number, passwordHash: string): Promise<void>;
   getStocks(): Promise<Stock[]>;
   getStock(symbol: string): Promise<Stock | undefined>;
   createStock(stock: InsertStock): Promise<Stock>;
   updateStock(symbol: string, updates: Partial<InsertStock>): Promise<Stock | undefined>;
-
-  // Watchlist methods
-  getWatchlists(): Promise<Watchlist[]>;
-  getWatchlist(id: number): Promise<Watchlist | undefined>;
+  getWatchlists(userId: number): Promise<Watchlist[]>;
+  getWatchlist(id: number, userId: number): Promise<Watchlist | undefined>;
   createWatchlist(watchlist: InsertWatchlist): Promise<Watchlist>;
-  updateWatchlist(id: number, updates: Partial<InsertWatchlist>): Promise<Watchlist | undefined>;
-  deleteWatchlist(id: number): Promise<boolean>;
-
-  // Trade methods
-  getTrades(): Promise<Trade[]>;
-  getActiveTrades(): Promise<Trade[]>;
-  getTrade(id: number): Promise<Trade | undefined>;
+  updateWatchlist(id: number, userId: number, updates: Partial<InsertWatchlist>): Promise<Watchlist | undefined>;
+  deleteWatchlist(id: number, userId: number): Promise<boolean>;
+  getTrades(userId: number): Promise<Trade[]>;
+  getActiveTrades(userId: number): Promise<Trade[]>;
+  getAllActiveTrades(): Promise<Trade[]>;
+  getTrade(id: number, userId: number): Promise<Trade | undefined>;
   createTrade(trade: InsertTrade): Promise<Trade>;
-  updateTrade(id: number, updates: Partial<InsertTrade>): Promise<Trade | undefined>;
-
-  // Price Alert methods
-  getPriceAlerts(): Promise<PriceAlert[]>;
-  getActivePriceAlerts(): Promise<PriceAlert[]>;
+  updateTrade(id: number, userId: number, updates: TradeUpdate): Promise<Trade | undefined>;
+  getPriceAlerts(userId: number): Promise<PriceAlert[]>;
+  getActivePriceAlerts(userId: number): Promise<PriceAlert[]>;
+  getAllActivePriceAlerts(): Promise<PriceAlert[]>;
+  markPriceAlertFired(id: number, firedPrice: string, firedAt: Date): Promise<PriceAlert | undefined>;
   createPriceAlert(alert: InsertPriceAlert): Promise<PriceAlert>;
-  updatePriceAlert(id: number, updates: Partial<InsertPriceAlert>): Promise<PriceAlert | undefined>;
-
-  // Scan Result methods
+  updatePriceAlert(id: number, userId: number, updates: Partial<InsertPriceAlert>): Promise<PriceAlert | undefined>;
+  deletePriceAlert(id: number, userId: number): Promise<boolean>;
   getScanResults(): Promise<ScanResult[]>;
   getScanResultsByType(scanType: string): Promise<ScanResult[]>;
   createScanResult(result: InsertScanResult): Promise<ScanResult>;
+  saveAuthCode(email: string, code: string): Promise<void>;
+  verifyAuthCode(email: string, code: string): Promise<boolean>;
+  deleteAuthCode(email: string): Promise<void>;
+  savePendingEmailChange(userId: number, email: string, codeDigest: string): Promise<void>;
+  completePendingEmailChange(userId: number, codeDigest: string): Promise<string | null>;
+  deletePendingEmailChange(userId: number): Promise<void>;
   clearOldScanResults(): Promise<void>;
 }
-
-export class MemStorage implements IStorage {
-  private users: Map<number, User> = new Map();
-  private stocks: Map<string, Stock> = new Map();
-  private watchlists: Map<number, Watchlist> = new Map();
-  private trades: Map<number, Trade> = new Map();
-  private priceAlerts: Map<number, PriceAlert> = new Map();
-  private scanResults: Map<number, ScanResult> = new Map();
-  
-  private currentUserId = 1;
-  private currentStockId = 1;
-  private currentWatchlistId = 1;
-  private currentTradeId = 1;
-  private currentAlertId = 1;
-  private currentScanId = 1;
-
-  constructor() {
-    this.initializeDefaultData();
-  }
-
-  private initializeDefaultData() {
-    // Create default user with your settings
-    const defaultUser: User = {
-      id: 1,
-      username: 'testuser', 
-      password: 'hashedpassword',
-      email: 'tfrei320@gmail.com',
-      emailAlerts: true,
-      tradingBankroll: '125486.32'
-    };
-    this.users.set(1, defaultUser);
-
-    // Initialize watchlists with your stocks
-    this.watchlists.set(1, {
-      id: 1,
-      name: "Focus List",
-      type: "focus",
-      symbols: ["TSLA", "GOOGL", "CVS", "MSFT", "AVGO", "AMD"],
-      createdAt: new Date()
-    });
-    
-    this.watchlists.set(2, {
-      id: 2,
-      name: "Flagged List", 
-      type: "flagged",
-      symbols: ["NVDA", "BAC"],
-      createdAt: new Date()
-    });
-    
-    this.currentWatchlistId = 3;
-
-    // Restore your previous price alerts
-    const nvdaAlert: PriceAlert = {
-      id: 1,
-      symbol: 'NVDA',
-      targetPrice: '152.34',
-      alertType: 'breakout',
-      isActive: true,
-      createdAt: new Date()
-    };
-    this.priceAlerts.set(1, nvdaAlert);
-
-    const amdAlert: PriceAlert = {
-      id: 2, 
-      symbol: 'AMD',
-      targetPrice: '142.58',
-      alertType: 'breakout',
-      isActive: true,
-      createdAt: new Date()
-    };
-    this.priceAlerts.set(2, amdAlert);
-
-    const cvsAlert: PriceAlert = {
-      id: 3,
-      symbol: 'CVS', 
-      targetPrice: '69.61',
-      alertType: 'breakout',
-      isActive: true,
-      createdAt: new Date()
-    };
-    this.priceAlerts.set(3, cvsAlert);
-
-    this.currentAlertId = 4;
-
-    // Restore your active trades from before the restart
-    const trade1: Trade = {
-      id: 1,
-      symbol: 'NVDA',
-      status: 'active',
-      entryPrice: '148.50',
-      stopLoss: '142.00',
-      profitTarget: '165.00',
-      shares: 67,
-      riskAmount: '435.50',
-      exitReason: null,
-      entryDate: new Date('2025-06-26'),
-      exitDate: null,
-      exitPrice: null,
-      pnl: null
-    };
-    this.trades.set(1, trade1);
-
-    const trade2: Trade = {
-      id: 2,
-      symbol: 'AMD',
-      status: 'active',
-      entryPrice: '136.25',
-      stopLoss: '130.50',
-      profitTarget: '152.00',
-      shares: 75,
-      riskAmount: '431.25',
-      exitReason: null,
-      entryDate: new Date('2025-06-26'),
-      exitDate: null,
-      exitPrice: null,
-      pnl: null
-    };
-    this.trades.set(2, trade2);
-
-    this.currentTradeId = 3;
-  }
-
-  // User methods
-  async getUser(id: number): Promise<User | undefined> {
-    return this.users.get(id);
-  }
-
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(user => user.username === username);
-  }
-
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const id = this.currentUserId++;
-    const user: User = { ...insertUser, id, email: null, emailAlerts: true, tradingBankroll: "0.00" };
-    this.users.set(id, user);
-    return user;
-  }
-
-  async updateUserProfile(id: number, updates: { email?: string; phone?: string; emailAlerts?: boolean; smsAlerts?: boolean }): Promise<User | undefined> {
-    const user = this.users.get(id);
-    if (!user) return undefined;
-    
-    const updated: User = { ...user, ...updates };
-    this.users.set(id, updated);
-    return updated;
-  }
-
-  // Stock methods
-  async getStocks(): Promise<Stock[]> {
-    return Array.from(this.stocks.values());
-  }
-
-  async getStock(symbol: string): Promise<Stock | undefined> {
-    return this.stocks.get(symbol);
-  }
-
-  async createStock(insertStock: InsertStock): Promise<Stock> {
-    const stock: Stock = { 
-      ...insertStock, 
-      id: this.currentStockId++,
-      adr: insertStock.adr || null,
-      dollarVolume: insertStock.dollarVolume || null,
-      lastUpdated: new Date()
-    };
-    this.stocks.set(insertStock.symbol, stock);
-    return stock;
-  }
-
-  async updateStock(symbol: string, updates: Partial<InsertStock>): Promise<Stock | undefined> {
-    const existing = this.stocks.get(symbol);
-    if (!existing) return undefined;
-    
-    const updated: Stock = { 
-      ...existing, 
-      ...updates,
-      lastUpdated: new Date()
-    };
-    this.stocks.set(symbol, updated);
-    return updated;
-  }
-
-  // Watchlist methods
-  async getWatchlists(): Promise<Watchlist[]> {
-    return Array.from(this.watchlists.values());
-  }
-
-  async getWatchlist(id: number): Promise<Watchlist | undefined> {
-    return this.watchlists.get(id);
-  }
-
-  async createWatchlist(insertWatchlist: InsertWatchlist): Promise<Watchlist> {
-    const id = this.currentWatchlistId++;
-    const watchlist: Watchlist = {
-      ...insertWatchlist,
-      id,
-      symbols: insertWatchlist.symbols || [],
-      createdAt: new Date()
-    };
-    this.watchlists.set(id, watchlist);
-    return watchlist;
-  }
-
-  async updateWatchlist(id: number, updates: Partial<InsertWatchlist>): Promise<Watchlist | undefined> {
-    const existing = this.watchlists.get(id);
-    if (!existing) return undefined;
-    
-    const updated: Watchlist = { ...existing, ...updates };
-    this.watchlists.set(id, updated);
-    return updated;
-  }
-
-  async deleteWatchlist(id: number): Promise<boolean> {
-    return this.watchlists.delete(id);
-  }
-
-  // Trade methods
-  async getTrades(): Promise<Trade[]> {
-    return Array.from(this.trades.values());
-  }
-
-  async getActiveTrades(): Promise<Trade[]> {
-    return Array.from(this.trades.values()).filter(trade => trade.status === 'active');
-  }
-
-  async getTrade(id: number): Promise<Trade | undefined> {
-    return this.trades.get(id);
-  }
-
-  async createTrade(insertTrade: InsertTrade): Promise<Trade> {
-    const id = this.currentTradeId++;
-    const trade: Trade = {
-      ...insertTrade,
-      id,
-      status: insertTrade.status ?? 'active',
-      entryDate: insertTrade.entryDate ?? new Date(),
-      exitDate: insertTrade.exitDate ?? null,
-      exitPrice: insertTrade.exitPrice ?? null,
-      pnl: insertTrade.pnl ?? null,
-      profitTarget: insertTrade.profitTarget ?? null,
-      exitReason: insertTrade.exitReason ?? null
-    };
-    this.trades.set(id, trade);
-    return trade;
-  }
-
-  async updateTrade(id: number, updates: Partial<InsertTrade>): Promise<Trade | undefined> {
-    const existing = this.trades.get(id);
-    if (!existing) return undefined;
-    
-    const updated: Trade = { ...existing, ...updates };
-    this.trades.set(id, updated);
-    return updated;
-  }
-
-  // Price Alert methods
-  async getPriceAlerts(): Promise<PriceAlert[]> {
-    return Array.from(this.priceAlerts.values());
-  }
-
-  async getActivePriceAlerts(): Promise<PriceAlert[]> {
-    return Array.from(this.priceAlerts.values()).filter(alert => alert.isActive);
-  }
-
-  async createPriceAlert(insertAlert: InsertPriceAlert): Promise<PriceAlert> {
-    const id = this.currentAlertId++;
-    const alert: PriceAlert = {
-      ...insertAlert,
-      id,
-      isActive: insertAlert.isActive !== undefined ? insertAlert.isActive : true,
-      createdAt: new Date()
-    };
-    this.priceAlerts.set(id, alert);
-    return alert;
-  }
-
-  async updatePriceAlert(id: number, updates: Partial<InsertPriceAlert>): Promise<PriceAlert | undefined> {
-    const existing = this.priceAlerts.get(id);
-    if (!existing) return undefined;
-    
-    const updated: PriceAlert = { ...existing, ...updates };
-    this.priceAlerts.set(id, updated);
-    return updated;
-  }
-
-  // Scan Result methods
-  async getScanResults(): Promise<ScanResult[]> {
-    return Array.from(this.scanResults.values());
-  }
-
-  async getScanResultsByType(scanType: string): Promise<ScanResult[]> {
-    return Array.from(this.scanResults.values()).filter(result => result.scanType === scanType);
-  }
-
-  async createScanResult(insertResult: InsertScanResult): Promise<ScanResult> {
-    const id = this.currentScanId++;
-    const result: ScanResult = {
-      ...insertResult,
-      id,
-      adr: insertResult.adr || null,
-      dollarVolume: insertResult.dollarVolume || null,
-      createdAt: new Date()
-    };
-    this.scanResults.set(id, result);
-    return result;
-  }
-
-  async clearOldScanResults(): Promise<void> {
-    // Force rebuild the entire scan results map to eliminate any corruption
-    this.scanResults = new Map<number, ScanResult>();
-    this.currentScanId = 1; // Reset ID counter
-    console.log('Scan results completely cleared and rebuilt');
-  }
-}
-
-import { db } from "./db";
-import { eq } from "drizzle-orm";
 
 export class DatabaseStorage implements IStorage {
   async getUser(id: number): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
     return user || undefined;
   }
-
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const normalized = email.trim().toLowerCase();
+    const [user] = await db.select().from(users).where(eq(sql`lower(${users.email})`, normalized));
+    return user || undefined;
+  }
   async getUserByUsername(username: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.username, username));
     return user || undefined;
   }
-
   async createUser(insertUser: InsertUser): Promise<User> {
-    const [user] = await db
-      .insert(users)
-      .values(insertUser)
-      .returning();
+    const [user] = await db.insert(users).values(insertUser).returning();
     return user;
   }
-
-  async updateUserProfile(id: number, updates: { email?: string; phone?: string; emailAlerts?: boolean; smsAlerts?: boolean }): Promise<User | undefined> {
-    const [user] = await db
-      .update(users)
-      .set(updates)
-      .where(eq(users.id, id))
-      .returning();
+  async updateUserProfile(id: number, updates: { username?: string; emailAlerts?: boolean; tradingBankroll?: string }): Promise<User | undefined> {
+    const [user] = await db.update(users).set(updates).where(eq(users.id, id)).returning();
     return user || undefined;
   }
-
+  async updateUserPassword(id: number, passwordHash: string): Promise<void> {
+    await db.update(users).set({ password: passwordHash }).where(eq(users.id, id));
+  }
   async getStocks(): Promise<Stock[]> {
     return await db.select().from(stocks);
   }
-
   async getStock(symbol: string): Promise<Stock | undefined> {
     const [stock] = await db.select().from(stocks).where(eq(stocks.symbol, symbol));
     return stock || undefined;
   }
-
   async createStock(insertStock: InsertStock): Promise<Stock> {
-    const [stock] = await db
-      .insert(stocks)
-      .values(insertStock)
-      .returning();
+    const [stock] = await db.insert(stocks).values(insertStock).returning();
     return stock;
   }
-
   async updateStock(symbol: string, updates: Partial<InsertStock>): Promise<Stock | undefined> {
-    const [stock] = await db
-      .update(stocks)
-      .set(updates)
-      .where(eq(stocks.symbol, symbol))
-      .returning();
+    const [stock] = await db.update(stocks).set(updates).where(eq(stocks.symbol, symbol)).returning();
     return stock || undefined;
   }
-
-  async getWatchlists(): Promise<Watchlist[]> {
-    return await db.select().from(watchlists);
+  async getWatchlists(userId: number): Promise<Watchlist[]> {
+    return await db.select().from(watchlists).where(eq(watchlists.userId, userId));
   }
-
-  async getWatchlist(id: number): Promise<Watchlist | undefined> {
-    const [watchlist] = await db.select().from(watchlists).where(eq(watchlists.id, id));
+  async getWatchlist(id: number, userId: number): Promise<Watchlist | undefined> {
+    const [watchlist] = await db.select().from(watchlists).where(and(eq(watchlists.id, id), eq(watchlists.userId, userId)));
     return watchlist || undefined;
   }
-
   async createWatchlist(insertWatchlist: InsertWatchlist): Promise<Watchlist> {
-    const [watchlist] = await db
-      .insert(watchlists)
-      .values(insertWatchlist)
-      .returning();
+    const [watchlist] = await db.insert(watchlists).values({ ...insertWatchlist, userId: insertWatchlist.userId }).returning();
     return watchlist;
   }
-
-  async updateWatchlist(id: number, updates: Partial<InsertWatchlist>): Promise<Watchlist | undefined> {
-    const [watchlist] = await db
-      .update(watchlists)
-      .set(updates)
-      .where(eq(watchlists.id, id))
-      .returning();
+  async updateWatchlist(id: number, userId: number, updates: Partial<InsertWatchlist>): Promise<Watchlist | undefined> {
+    const [watchlist] = await db.update(watchlists).set(updates).where(and(eq(watchlists.id, id), eq(watchlists.userId, userId))).returning();
     return watchlist || undefined;
   }
-
-  async deleteWatchlist(id: number): Promise<boolean> {
-    const result = await db.delete(watchlists).where(eq(watchlists.id, id));
+  async deleteWatchlist(id: number, userId: number): Promise<boolean> {
+    const result = await db.delete(watchlists).where(and(eq(watchlists.id, id), eq(watchlists.userId, userId)));
     return result.rowCount > 0;
   }
-
-  async getTrades(): Promise<Trade[]> {
-    return await db.select().from(trades);
+  async getTrades(userId: number): Promise<Trade[]> {
+    return await db.select().from(trades).where(eq(trades.userId, userId));
   }
-
-  async getActiveTrades(): Promise<Trade[]> {
+  async getActiveTrades(userId: number): Promise<Trade[]> {
+    return await db.select().from(trades).where(and(eq(trades.status, 'active'), eq(trades.userId, userId)));
+  }
+  // All users' active trades (each includes userId), for the background trade monitor only.
+  async getAllActiveTrades(): Promise<Trade[]> {
     return await db.select().from(trades).where(eq(trades.status, 'active'));
   }
-
-  async getTrade(id: number): Promise<Trade | undefined> {
-    const [trade] = await db.select().from(trades).where(eq(trades.id, id));
+  async getTrade(id: number, userId: number): Promise<Trade | undefined> {
+    const [trade] = await db.select().from(trades).where(and(eq(trades.id, id), eq(trades.userId, userId)));
     return trade || undefined;
   }
-
   async createTrade(insertTrade: InsertTrade): Promise<Trade> {
-    const [trade] = await db
-      .insert(trades)
-      .values(insertTrade)
-      .returning();
+    const [trade] = await db.insert(trades).values({ ...insertTrade, userId: insertTrade.userId }).returning();
     return trade;
   }
-
-  async updateTrade(id: number, updates: Partial<InsertTrade>): Promise<Trade | undefined> {
-    const [trade] = await db
-      .update(trades)
-      .set(updates)
-      .where(eq(trades.id, id))
-      .returning();
+  async updateTrade(id: number, userId: number, updates: TradeUpdate): Promise<Trade | undefined> {
+    const [trade] = await db.update(trades).set(updates).where(and(eq(trades.id, id), eq(trades.userId, userId))).returning();
     return trade || undefined;
   }
-
-  async getPriceAlerts(): Promise<PriceAlert[]> {
-    return await db.select().from(priceAlerts);
+  async getPriceAlerts(userId: number): Promise<PriceAlert[]> {
+    return await db.select().from(priceAlerts).where(eq(priceAlerts.userId, userId));
   }
-
-  async getActivePriceAlerts(): Promise<PriceAlert[]> {
+  async getActivePriceAlerts(userId: number): Promise<PriceAlert[]> {
+    return await db.select().from(priceAlerts).where(and(eq(priceAlerts.isActive, true), eq(priceAlerts.userId, userId)));
+  }
+  // All users' active alerts (each includes userId), for the background alert checker only.
+  async getAllActivePriceAlerts(): Promise<PriceAlert[]> {
     return await db.select().from(priceAlerts).where(eq(priceAlerts.isActive, true));
   }
-
-  async createPriceAlert(insertAlert: InsertPriceAlert): Promise<PriceAlert> {
-    const [alert] = await db
-      .insert(priceAlerts)
-      .values(insertAlert)
-      .returning();
-    return alert;
-  }
-
-  async updatePriceAlert(id: number, updates: Partial<InsertPriceAlert>): Promise<PriceAlert | undefined> {
-    const [alert] = await db
-      .update(priceAlerts)
-      .set(updates)
-      .where(eq(priceAlerts.id, id))
+  // Turns an active alert off and records when and at what price it fired.
+  // Returns undefined if it was already off or deleted, so it never fires twice.
+  async markPriceAlertFired(id: number, firedPrice: string, firedAt: Date): Promise<PriceAlert | undefined> {
+    const [alert] = await db.update(priceAlerts)
+      .set({ isActive: false, firedPrice, firedAt })
+      .where(and(eq(priceAlerts.id, id), eq(priceAlerts.isActive, true)))
       .returning();
     return alert || undefined;
   }
-
+  async createPriceAlert(insertAlert: InsertPriceAlert): Promise<PriceAlert> {
+    const [alert] = await db.insert(priceAlerts).values({ ...insertAlert, userId: insertAlert.userId }).returning();
+    return alert;
+  }
+  async updatePriceAlert(id: number, userId: number, updates: Partial<InsertPriceAlert>): Promise<PriceAlert | undefined> {
+    const [alert] = await db.update(priceAlerts).set(updates).where(and(eq(priceAlerts.id, id), eq(priceAlerts.userId, userId))).returning();
+    return alert || undefined;
+  }
+  async deletePriceAlert(id: number, userId: number): Promise<boolean> {
+    const deleted = await db.delete(priceAlerts)
+      .where(and(eq(priceAlerts.id, id), eq(priceAlerts.userId, userId)))
+      .returning({ id: priceAlerts.id });
+    return deleted.length > 0;
+  }
   async getScanResults(): Promise<ScanResult[]> {
     return await db.select().from(scanResults);
   }
-
   async getScanResultsByType(scanType: string): Promise<ScanResult[]> {
     return await db.select().from(scanResults).where(eq(scanResults.scanType, scanType));
   }
-
   async createScanResult(insertResult: InsertScanResult): Promise<ScanResult> {
-    const [result] = await db
-      .insert(scanResults)
-      .values(insertResult)
-      .returning();
+    const [result] = await db.insert(scanResults).values(insertResult).returning();
     return result;
+  }
+  async saveAuthCode(email: string, code: string): Promise<void> {
+    await db.insert(authCodes).values({
+      email,
+      code,
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+    });
+  }
+
+  async verifyAuthCode(email: string, code: string): Promise<boolean> {
+    return await db.transaction(async (tx) => {
+      const [result] = await tx.delete(authCodes)
+        .where(and(eq(authCodes.email, email), eq(authCodes.code, code)))
+        .returning();
+      
+      if (!result || result.expiresAt < new Date()) return false;
+      return true;
+    });
+  }
+
+  async deleteAuthCode(email: string): Promise<void> {
+    await db.delete(authCodes).where(eq(authCodes.email, email));
+  }
+
+  async savePendingEmailChange(userId: number, email: string, codeDigest: string): Promise<void> {
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    await db.insert(pendingEmailChanges).values({
+      userId,
+      email,
+      codeDigest,
+      expiresAt,
+    }).onConflictDoUpdate({
+      target: pendingEmailChanges.userId,
+      set: {
+        email,
+        codeDigest,
+        expiresAt,
+        createdAt: new Date(),
+      },
+    });
+  }
+
+  async completePendingEmailChange(userId: number, codeDigest: string): Promise<string | null> {
+    return await db.transaction(async (tx) => {
+      const [pending] = await tx.select()
+        .from(pendingEmailChanges)
+        .where(eq(pendingEmailChanges.userId, userId))
+        .for("update");
+
+      if (!pending || pending.expiresAt < new Date() || pending.codeDigest !== codeDigest) {
+        return null;
+      }
+
+      const [updatedUser] = await tx.update(users)
+        .set({ email: pending.email })
+        .where(eq(users.id, userId))
+        .returning({ email: users.email });
+
+      if (!updatedUser) return null;
+
+      await tx.delete(pendingEmailChanges)
+        .where(eq(pendingEmailChanges.userId, userId));
+
+      return updatedUser.email;
+    });
+  }
+
+  async deletePendingEmailChange(userId: number): Promise<void> {
+    await db.delete(pendingEmailChanges)
+      .where(eq(pendingEmailChanges.userId, userId));
   }
 
   async clearOldScanResults(): Promise<void> {
@@ -522,6 +250,4 @@ export class DatabaseStorage implements IStorage {
   }
 }
 
-import { FileStorage } from "./fileStorage";
-
-export const storage = new FileStorage();
+export const storage = new DatabaseStorage();

@@ -1,20 +1,31 @@
 import { useState, useEffect } from 'react';
 
+type Theme = 'light' | 'dark';
+
+// Dark is the default. A saved "light" preference is still honoured.
+function getInitialTheme(): Theme {
+  try {
+    return localStorage.getItem('theme') === 'light' ? 'light' : 'dark';
+  } catch {
+    return 'dark';
+  }
+}
+
 export function useTheme() {
-  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [theme, setTheme] = useState<Theme>(getInitialTheme);
 
   useEffect(() => {
-    // Check for saved theme preference or default to light
-    const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' || 'light';
-    setTheme(savedTheme);
-    document.documentElement.classList.toggle('dark', savedTheme === 'dark');
-  }, []);
+    document.documentElement.classList.toggle('dark', theme === 'dark');
+  }, [theme]);
 
   const toggleTheme = () => {
-    const newTheme = theme === 'light' ? 'dark' : 'light';
+    const newTheme: Theme = theme === 'light' ? 'dark' : 'light';
     setTheme(newTheme);
-    localStorage.setItem('theme', newTheme);
-    document.documentElement.classList.toggle('dark', newTheme === 'dark');
+    try {
+      localStorage.setItem('theme', newTheme);
+    } catch {
+      // Storage unavailable (private mode); the choice lasts for this session.
+    }
   };
 
   return { theme, toggleTheme };

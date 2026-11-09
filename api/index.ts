@@ -1,14 +1,41 @@
 import express, { type Request, Response, NextFunction } from "express";
+import session from "express-session";
+import passport from "passport";
+import connectPgSimple from "connect-pg-simple";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { startTradeMonitoring } from "./tradeMonitor";
 import { DatabaseStorage } from "./storage";
+import { setupAuth } from "./authSetup";
+import { pool } from "./db";
 
+const PgSession = connectPgSimple(session);
 const storage = new DatabaseStorage();
 
 const app = express();
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+  app.set("trust proxy", 1);
+  app.use(express.json());
+  app.use(express.urlencoded({ extended: false }));
+
+  // Session configuration
+  app.use(session({
+    secret: process.env.SESSION_SECRET || 'dev_secret_key',
+    resave: false,
+    saveUninitialized: false,
+    store: new PgSession({
+        pool,
+        tableName: 'session'
+    }),
+    cookie: {
+      secure: process.env.NODE_ENV === 'production',
+      httpOnly: true,
+      sameSite: 'lax',
+      maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    }
+  }));
+  app.use(passport.initialize());
+  app.use(passport.session());
+  setupAuth();
 
 // Simple request logging
 app.use((req, res, next) => {
@@ -33,7 +60,9 @@ app.use((req, res, next) => {
   }
 
   // Start trade monitoring system
-  startTradeMonitoring();
+  if (process.env.DISABLE_TRADE_MONITORING !== 'true') {
+    startTradeMonitoring();
+  }
 
   // ALWAYS serve the app on port 5000
   // this serves both the API and the client.

@@ -2,59 +2,66 @@
 import yfinance as yf
 import json
 import sys
+import os
+import requests
+from datetime import datetime, timedelta
+
+def get_massive_historical(symbol, days=30):
+    """Retrieve historical daily aggregates from Massive/Polygon"""
+    key = os.environ.get("MASSIVE_API_KEY")
+    if not key:
+        return None
+    
+    end = datetime.now()
+    start = end - timedelta(days=days)
+    url = f"https://api.polygon.io/v2/aggs/ticker/{symbol.upper()}/range/1/day/{start.strftime('%Y-%m-%d')}/{end.strftime('%Y-%m-%d')}?adjusted=true&sort=asc&apiKey={key}"
+    
+    try:
+        response = requests.get(url, timeout=10)
+        if response.ok:
+            data = response.json()
+            if data.get("status") == "OK" and "results" in data:
+                return data["results"]
+    except Exception:
+        pass
+    return None
 
 def scan_stock(symbol):
-    """Scan a single stock for momentum"""
+    """Scan a single stock for momentum using Massive or Yahoo fallback"""
     try:
-        ticker = yf.Ticker(symbol)
-        hist = ticker.history(period='30d')
+        # 1. Try Massive (Polygon.io)
+        results = get_massive_historical(symbol)
         
-        if hist.empty:
-            return None
-            
-        latest = hist.iloc[-1]
-        first = hist.iloc[0]
-        change_pct = ((latest['Close'] - first['Close']) / first['Close']) * 100
-        
-        info = ticker.info
-        sector = info.get('sector', 'Unknown')
-        
-        price = float(latest['Close'])
-        volume = int(latest['Volume'])
-        dollar_volume = price * volume
-        
-        result = {
-            'symbol': symbol,
-            'price': price,
-            'volume': volume,
-            'change_percent': float(change_pct),
-            'sector': sector,
-            'dollar_volume': dollar_volume
-        }
+        if results:
+            latest = results[-1]
+            first = results[0]
+            price = float(latest['c'])
+            volume = int(latest['v'])
+            change_pct = ((price - first['c']) / first['c']) * 100
+            dollar_volume = price * volume
+            sector = "Unknown" # Note: Sector not provided by Aggregates API
+        else:
+            # 2. Fallback to Yahoo Finance
+            ticker = yf.Ticker(symbol)
+            hist = ticker.history(period='30d')
+            if hist.empty:
+                return None
+            latest = hist.iloc[-1]
+            first = hist.iloc[0]
+            price = float(latest['Close'])
+            volume = int(latest['Volume'])
+            change_pct = ((price - first['Close']) / first['Close']) * 100
+            dollar_volume = price * volume
+            sector = ticker.info.get('sector', 'Unknown')
         
         # Apply ALL of Morgan's swing trading criteria
-        # 1. Price Movement > 5% gain (30-day momentum)
-        if change_pct <= 5:
+        if change_pct <= 5 or volume <= 500000 or dollar_volume <= 5000000 or price <= 10 or 'biotech' in sector.lower():
             return None
             
-        # 2. Volume > 500,000 shares (liquidity requirement)
-        if volume <= 500000:
-            return None
-            
-        # 3. Dollar Volume > $5M (institutional interest)
-        if dollar_volume <= 5000000:
-            return None
-            
-        # 4. Exclude biotechnology stocks (high volatility sector)
-        if 'biotech' in sector.lower() or 'biotechnology' in sector.lower():
-            return None
-            
-        # 5. Price > $10 (avoid penny stocks)
-        if price <= 10:
-            return None
-            
-        return result
-            
+        return {
+            'symbol': symbol, 'price': price, 'volume': volume,
+            'change_percent': float(change_pct), 'sector': sector, 'dollar_volume': dollar_volume
+        }
     except Exception as e:
         print(f"Error scanning {symbol}: {e}", file=sys.stderr)
         return None
