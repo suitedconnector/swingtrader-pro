@@ -19,6 +19,13 @@ const SCAN_CRITERIA = [
 
 const th = 'pb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground';
 
+/** "+7.60%", "-0.19%"; "—" when the value is not a number. */
+function formatChange(value: string | number) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '—';
+  return `${n > 0 ? '+' : ''}${n.toFixed(2)}%`;
+}
+
 export function ScanningPhase() {
   const queryClient = useQueryClient();
   const [selectedSector, setSelectedSector] = useState<string>('all');
@@ -337,7 +344,14 @@ export function ScanningPhase() {
                       <tr key={result.id}>
                         <td className="py-2.5 font-medium text-foreground">{result.symbol}</td>
                         <td className="py-2.5 text-right font-mono tabular-nums">{Number(result.price).toFixed(2)}</td>
-                        <td className="py-2.5 text-right font-mono tabular-nums text-signal-up">+{result.changePercent}%</td>
+                        <td
+                          className={cn(
+                            'py-2.5 text-right font-mono tabular-nums',
+                            Number(result.changePercent) < 0 ? 'text-signal-down' : 'text-signal-up'
+                          )}
+                        >
+                          {formatChange(result.changePercent)}
+                        </td>
                         <td className="py-2.5 text-right font-mono tabular-nums text-muted-foreground">
                           {(Number(result.volume) / 1000000).toFixed(1)}M
                         </td>
