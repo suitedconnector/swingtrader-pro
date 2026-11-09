@@ -6,6 +6,9 @@ import { authCodes, pendingEmailChanges, users, stocks, watchlists, trades, pric
 import { db } from "./db";
 import { eq, sql, and } from "drizzle-orm";
 
+// InsertTrade omits exitDate; closing a trade must be able to set it.
+export type TradeUpdate = Partial<InsertTrade> & { exitDate?: Date | null };
+
 export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
@@ -24,9 +27,10 @@ export interface IStorage {
   deleteWatchlist(id: number, userId: number): Promise<boolean>;
   getTrades(userId: number): Promise<Trade[]>;
   getActiveTrades(userId: number): Promise<Trade[]>;
+  getAllActiveTrades(): Promise<Trade[]>;
   getTrade(id: number, userId: number): Promise<Trade | undefined>;
   createTrade(trade: InsertTrade): Promise<Trade>;
-  updateTrade(id: number, userId: number, updates: Partial<InsertTrade>): Promise<Trade | undefined>;
+  updateTrade(id: number, userId: number, updates: TradeUpdate): Promise<Trade | undefined>;
   getPriceAlerts(userId: number): Promise<PriceAlert[]>;
   getActivePriceAlerts(userId: number): Promise<PriceAlert[]>;
   createPriceAlert(alert: InsertPriceAlert): Promise<PriceAlert>;
@@ -109,6 +113,10 @@ export class DatabaseStorage implements IStorage {
   async getActiveTrades(userId: number): Promise<Trade[]> {
     return await db.select().from(trades).where(and(eq(trades.status, 'active'), eq(trades.userId, userId)));
   }
+  // All users' active trades (each includes userId), for the background trade monitor only.
+  async getAllActiveTrades(): Promise<Trade[]> {
+    return await db.select().from(trades).where(eq(trades.status, 'active'));
+  }
   async getTrade(id: number, userId: number): Promise<Trade | undefined> {
     const [trade] = await db.select().from(trades).where(and(eq(trades.id, id), eq(trades.userId, userId)));
     return trade || undefined;
@@ -117,7 +125,7 @@ export class DatabaseStorage implements IStorage {
     const [trade] = await db.insert(trades).values({ ...insertTrade, userId: insertTrade.userId }).returning();
     return trade;
   }
-  async updateTrade(id: number, userId: number, updates: Partial<InsertTrade>): Promise<Trade | undefined> {
+  async updateTrade(id: number, userId: number, updates: TradeUpdate): Promise<Trade | undefined> {
     const [trade] = await db.update(trades).set(updates).where(and(eq(trades.id, id), eq(trades.userId, userId))).returning();
     return trade || undefined;
   }
