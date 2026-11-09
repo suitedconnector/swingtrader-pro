@@ -1,12 +1,23 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress';
 import { apiRequest } from '@/lib/queryClient';
 import type { ScanResult, Watchlist } from '@shared/schema';
-import { Check, Search, X } from 'lucide-react';
+import { Check, Play, RotateCcw } from 'lucide-react';
+import { EmptyState, PageHeader, Section, Stat } from '@/components/layout/primitives';
+import { cn } from '@/lib/utils';
+
+const SCAN_CRITERIA = [
+  '> 5% gain over 30 days',
+  'Volume > 500K',
+  'Dollar volume > $5M',
+  'Price > $10',
+  'Biotech excluded',
+];
+
+const th = 'pb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground';
 
 export function ScanningPhase() {
   const queryClient = useQueryClient();
@@ -16,10 +27,6 @@ export function ScanningPhase() {
   const [scanProgress, setScanProgress] = useState(0);
   const [isScanning, setIsScanning] = useState(false);
   const [currentStock, setCurrentStock] = useState<string>('');
-  // Market data for context
-  const { data: marketData } = useQuery<any>({
-    queryKey: ['/api/market-data'],
-  });
 
   // Top trading sectors (excluding biotech)
   const tradingSectors = [
@@ -173,14 +180,20 @@ export function ScanningPhase() {
 
   // Paginate the filtered results without changing the underlying scan data.
   const totalPages = Math.max(1, Math.ceil(filteredScanResults.length / pageSize));
+  // Clamp in case the result list shrinks (filter, reset) while on a later page.
+  const safePage = Math.min(currentPage, totalPages);
   const paginatedScanResults = filteredScanResults.slice(
-    (currentPage - 1) * pageSize,
-    currentPage * pageSize
+    (safePage - 1) * pageSize,
+    safePage * pageSize
   );
   const firstDisplayed = filteredScanResults.length === 0
     ? 0
-    : (currentPage - 1) * pageSize + 1;
-  const lastDisplayed = Math.min(currentPage * pageSize, filteredScanResults.length);
+    : (safePage - 1) * pageSize + 1;
+  const lastDisplayed = Math.min(safePage * pageSize, filteredScanResults.length);
+
+  const focusSymbols = new Set(watchlists.find(w => w.type === 'focus')?.symbols ?? []);
+  const flaggedSymbols = new Set(watchlists.find(w => w.type === 'flagged')?.symbols ?? []);
+  const listBusy = addToWatchlistMutation.isPending || createWatchlistMutation.isPending;
 
   // Calculate summary statistics
   const scanStats = {
@@ -192,270 +205,166 @@ export function ScanningPhase() {
       : '0'
   };
 
+  const busy = isScanning || runScansMutation.isPending;
+
+  const listButton = (symbol: string, type: 'focus' | 'flagged') => {
+    const inList = (type === 'focus' ? focusSymbols : flaggedSymbols).has(symbol);
+    const label = type === 'focus' ? 'Focus' : 'Flag';
+    return (
+      <Button
+        size="sm"
+        variant="ghost"
+        className={cn('h-7 px-2 text-xs', inList ? 'text-foreground' : 'text-muted-foreground hover:text-foreground')}
+        onClick={() => handleAddToWatchlist(symbol, type)}
+        disabled={inList || listBusy}
+        aria-label={inList ? `${symbol} is on the ${type} list` : `Add ${symbol} to the ${type} list`}
+      >
+        {inList && <Check aria-hidden="true" />}
+        {inList ? (type === 'focus' ? 'Focused' : 'Flagged') : label}
+      </Button>
+    );
+  };
+
   return (
-    <div className="bg-white dark:bg-dark-surface rounded-xl shadow-sm border border-gray-200 dark:border-dark-border p-6">
-      <h3 className="text-lg font-semibold mb-4 flex items-center">
-        <Search className="inline-block shrink-0 h-4 w-4 text-trading-primary mr-2" aria-hidden="true" />
-        Phase 1: Scanning & Initial Stock Identification
-      </h3>
-      
-      <div className="space-y-4">
-        {/* Morgan's Trading Criteria Status */}
-        <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 mb-6">
-          <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-3">Morgan's Swing Trading Criteria</h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-            <div className="flex items-center space-x-2">
-              <span className="text-green-600">✓</span>
-              <span>Price Movement &gt; 5% gain (30-day)</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <span className="text-green-600">✓</span>
-              <span>Volume &gt; 500K shares (liquidity)</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <span className="text-green-600">✓</span>
-              <span>Dollar Volume &gt; $5M (institutional interest)</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <span className="text-green-600">✓</span>
-              <span>Exclude biotechnology stocks</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <span className="text-green-600">✓</span>
-              <span>Price &gt; $10 (avoid penny stocks)</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <span className="text-green-600">✓</span>
-              <span>Multi-sector diversification</span>
-            </div>
+    <>
+      <PageHeader
+        title="Scanner"
+        description="Stocks that match your swing-trading criteria."
+        actions={
+          <>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground hover:text-foreground"
+              onClick={() => resetScansMutation.mutate()}
+              disabled={resetScansMutation.isPending || isScanning}
+            >
+              <RotateCcw aria-hidden="true" />
+              {resetScansMutation.isPending ? 'Clearing…' : 'Clear results'}
+            </Button>
+            <Button size="sm" onClick={handleRunScans} disabled={busy}>
+              <Play aria-hidden="true" />
+              {busy ? 'Scanning…' : 'Run scan'}
+            </Button>
+          </>
+        }
+      />
+
+      {isScanning && (
+        <div className="-mt-4 pb-8" role="status" aria-live="polite">
+          <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
+            <span>{currentStock}</span>
+            <span className="font-mono tabular-nums">{Math.round(scanProgress)}%</span>
           </div>
+          <Progress value={scanProgress} className="h-[3px] bg-muted" />
         </div>
+      )}
 
-        {/* Market Overview */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-          <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
-            <h4 className="font-medium text-gray-900 dark:text-white mb-2">Market Context</h4>
-            {marketData ? (
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span>SPY:</span>
-                  <span className="font-mono">${marketData.spy.price} {marketData.spy.change}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>QQQ (Nasdaq-100):</span>
-                  <span className="font-mono">${marketData.nasdaq.price} {marketData.nasdaq.change}</span>
-                </div>                
-                <div className="pt-2 border-t border-gray-200 dark:border-gray-600">
-                  <span className="text-xs text-gray-600 dark:text-gray-400">Trend: </span>
-                  <span className={`text-xs font-medium ${
-                    marketData.trend === 'Bullish' ? 'text-green-600' : 
-                    marketData.trend === 'Bearish' ? 'text-red-600' : 'text-yellow-600'
-                  }`}>
-                    {marketData.trend}
-                  </span>
-                </div>
-              </div>
-            ) : (
-              <p className="text-sm text-gray-500">Loading market data...</p>
-            )}
-          </div>
+      <div className="grid grid-cols-2 gap-x-8 gap-y-8 pb-6 lg:grid-cols-4">
+        <Stat label="Results" value={scanStats.totalResults} />
+        <Stat
+          label="Strong gainers"
+          value={scanStats.strongGainers}
+          hint="Up more than 10%"
+          signal={scanStats.strongGainers > 0 ? 'up' : undefined}
+        />
+        <Stat label="Average gain" value={`${scanStats.avgGain}%`} />
+        <Stat
+          label="Top sectors"
+          value={<span className="font-sans text-sm">{scanStats.topSectors.join(', ') || '—'}</span>}
+        />
+      </div>
 
-          <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
-            <h4 className="font-medium text-gray-900 dark:text-white mb-2">Scan Statistics</h4>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span>Total Results:</span>
-                <span className="font-medium">{scanStats.totalResults}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Strong Gainers (&gt;10%):</span>
-                <span className="font-medium text-green-600">{scanStats.strongGainers}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Average Gain:</span>
-                <span className="font-medium">{scanStats.avgGain}%</span>
-              </div>
-              <div className="pt-2 border-t border-gray-200 dark:border-gray-600">
-                <span className="text-xs text-gray-600 dark:text-gray-400">Top Sectors: </span>
-                <span className="text-xs">{scanStats.topSectors.join(', ')}</span>
-              </div>
-            </div>
-          </div>
+      <p className="pb-8 text-xs text-muted-foreground">
+        <span className="mr-2 uppercase tracking-wider">Criteria</span>
+        {SCAN_CRITERIA.join('  ·  ')}
+      </p>
 
-          <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
-            <h4 className="font-medium text-gray-900 dark:text-white mb-2">Scan Filters Active</h4>
-            <div className="space-y-1 text-xs text-gray-600 dark:text-gray-400">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <Check className="inline-block shrink-0 text-green-500 h-4 w-4" aria-hidden="true" />
-                  <span>Price Movement</span>
-                </div>
-                <span className="text-green-600 font-medium">&gt; 5% gain</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <Check className="inline-block shrink-0 text-green-500 h-4 w-4" aria-hidden="true" />
-                  <span>Volume</span>
-                </div>
-                <span className="text-green-600 font-medium">&gt; 500K shares</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <Check className="inline-block shrink-0 text-green-500 h-4 w-4" aria-hidden="true" />
-                  <span>Dollar Volume</span>
-                </div>
-                <span className="text-green-600 font-medium">&gt; $5M</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <Check className="inline-block shrink-0 text-green-500 h-4 w-4" aria-hidden="true" />
-                  <span>Price Level</span>
-                </div>
-                <span className="text-green-600 font-medium">&gt; $10.00</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <X className="inline-block shrink-0 text-red-500 h-4 w-4" aria-hidden="true" />
-                  <span>Biotech Stocks</span>
-                </div>
-                <span className="text-red-600 font-medium">Excluded</span>
-              </div>
-            </div>
-            <div className="flex space-x-2 mt-4">
-              <Button 
-                onClick={handleRunScans} 
-                disabled={isScanning || runScansMutation.isPending}
-                className="flex-1 text-xs"
-                size="sm"
-              >
-                {isScanning ? 'Scanning...' : 'Run Scan'}
-              </Button>
-              <Button 
-                onClick={() => resetScansMutation.mutate()} 
-                disabled={resetScansMutation.isPending || isScanning}
-                variant="outline"
-                className="flex-1 text-xs"
-                size="sm"
-              >
-                {resetScansMutation.isPending ? 'Clearing...' : 'Reset'}
-              </Button>
-            </div>
-            
-            {/* Progress bar during scanning */}
-            {isScanning && (
-              <div className="mt-4 space-y-2">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600 dark:text-gray-400">{currentStock}</span>
-                  <span className="text-gray-600 dark:text-gray-400">{Math.round(scanProgress)}%</span>
-                </div>
-                <Progress value={scanProgress} className="h-2" />
-                <div className="flex items-center justify-center space-x-2 text-xs text-gray-500">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-trading-primary"></div>
-                  <span>Scanning market for opportunities...</span>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="mt-6">
-          <div className="flex items-center justify-between mb-4">
-            <h4 className="font-medium text-gray-900 dark:text-white">Scan Results</h4>
-            <div className="flex items-center space-x-2">
-              <span className="text-sm text-gray-600 dark:text-gray-400">Filter by Sector:</span>
-              <Select
-                value={selectedSector}
-                onValueChange={(value) => {
-                  setSelectedSector(value);
-                  setCurrentPage(1);
-                }}
-              >
-                <SelectTrigger className="w-48">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {tradingSectors.map((sector) => (
-                    <SelectItem key={sector.value} value={sector.value}>
-                      {sector.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          {scanLoading ? (
-            <div className="text-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-trading-primary mx-auto"></div>
-              <p className="text-gray-600 dark:text-gray-400 mt-2">Loading scan results...</p>
-            </div>
-          ) : filteredScanResults.length === 0 ? (
-            <div className="text-center py-8">
-              <Search className="inline-block shrink-0 h-10 w-10 text-gray-400 mb-4" aria-hidden="true" />
-              <p className="text-gray-600 dark:text-gray-400">
-                {scanResults.length === 0 
-                  ? "No scan results yet. Run scans to see potential trading candidates."
-                  : `No stocks found in ${selectedSector === 'all' ? 'selected' : selectedSector} sector.`
-                }
-              </p>
-            </div>
-          ) : (
-            <div>
+      <Section
+        title="Results"
+        actions={
+          <Select
+            value={selectedSector}
+            onValueChange={(value) => {
+              setSelectedSector(value);
+              setCurrentPage(1);
+            }}
+          >
+            <SelectTrigger className="h-8 w-52 border-0 bg-muted text-xs" aria-label="Filter by sector">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {tradingSectors.map((sector) => (
+                <SelectItem key={sector.value} value={sector.value}>
+                  {sector.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        }
+      >
+        {scanLoading ? (
+          <p className="py-8 text-sm text-muted-foreground">Loading scan results…</p>
+        ) : filteredScanResults.length === 0 ? (
+          <EmptyState
+            title={scanResults.length === 0 ? 'No scan results yet' : `No stocks in ${selectedSector}`}
+            description={
+              scanResults.length === 0
+                ? 'Run a scan to find candidates that meet the criteria.'
+                : 'Choose another sector or All Sectors.'
+            }
+          />
+        ) : (
+          <>
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                <thead className="bg-gray-50 dark:bg-gray-800">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Symbol</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Price</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Change</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Volume</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Sector</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Action</th>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left">
+                    <th className={th}>Symbol</th>
+                    <th className={cn(th, 'text-right')}>Price</th>
+                    <th className={cn(th, 'text-right')}>Change</th>
+                    <th className={cn(th, 'text-right')}>Volume</th>
+                    <th className={cn(th, 'pl-6')}>Sector</th>
+                    <th className={cn(th, 'text-right')}>
+                      <span className="sr-only">Watchlists</span>
+                    </th>
                   </tr>
                 </thead>
-                <tbody className="bg-white dark:bg-dark-surface divide-y divide-gray-200 dark:divide-gray-700">
-                  {paginatedScanResults.map((result) => (
-                    <tr key={result.id} className={isBiotechStock(result.sector) ? 'bg-red-50 dark:bg-red-900/20' : ''}>
-                      <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">{result.symbol}</td>
-                      <td className="px-4 py-3 text-sm font-mono text-gray-900 dark:text-white">${result.price}</td>
-                      <td className="px-4 py-3 text-sm font-mono text-trading-success">+{result.changePercent}%</td>
-                      <td className="px-4 py-3 text-sm font-mono text-gray-900 dark:text-white">{(Number(result.volume) / 1000000).toFixed(1)}M</td>
-                      <td className={`px-4 py-3 text-sm ${isBiotechStock(result.sector) ? 'text-trading-error' : 'text-gray-600 dark:text-gray-400'}`}>
-                        {result.sector}
-                      </td>
-                      <td className="px-4 py-3">
-                        {isBiotechStock(result.sector) ? (
-                          <Button size="sm" variant="destructive" disabled>
-                            Avoid
-                          </Button>
-                        ) : (
-                          <div className="flex space-x-2">
-                            <Button 
-                              size="sm" 
-                              onClick={() => handleAddToWatchlist(result.symbol, 'flagged')}
-                              disabled={addToWatchlistMutation.isPending}
-                            >
-                              Add to Flagged
-                            </Button>
-                            <Button 
-                              size="sm" 
-                              variant="outline"
-                              onClick={() => handleAddToWatchlist(result.symbol, 'focus')}
-                              disabled={addToWatchlistMutation.isPending}
-                            >
-                              Add to Focus
-                            </Button>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                <tbody className="divide-y divide-border/60">
+                  {paginatedScanResults.map((result) => {
+                    const biotech = isBiotechStock(result.sector);
+                    return (
+                      <tr key={result.id}>
+                        <td className="py-2.5 font-medium text-foreground">{result.symbol}</td>
+                        <td className="py-2.5 text-right font-mono tabular-nums">{Number(result.price).toFixed(2)}</td>
+                        <td className="py-2.5 text-right font-mono tabular-nums text-signal-up">+{result.changePercent}%</td>
+                        <td className="py-2.5 text-right font-mono tabular-nums text-muted-foreground">
+                          {(Number(result.volume) / 1000000).toFixed(1)}M
+                        </td>
+                        <td className={cn('py-2.5 pl-6', biotech ? 'text-signal-down' : 'text-muted-foreground')}>
+                          {result.sector}
+                        </td>
+                        <td className="py-2.5 text-right">
+                          {biotech ? (
+                            <span className="text-xs text-signal-down">Avoid</span>
+                          ) : (
+                            <span className="inline-flex gap-1">
+                              {listButton(result.symbol, 'flagged')}
+                              {listButton(result.symbol, 'focus')}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4">
-              <div className="flex items-center gap-3 text-sm text-gray-600 dark:text-gray-400">
+
+            <div className="flex flex-col items-center justify-between gap-3 pt-6 text-xs text-muted-foreground sm:flex-row">
+              <div className="flex items-center gap-3">
                 <span>
-                  Showing {firstDisplayed}–{lastDisplayed} of {filteredScanResults.length} stocks
+                  {firstDisplayed}–{lastDisplayed} of {filteredScanResults.length}
                 </span>
                 <Select
                   value={String(pageSize)}
@@ -464,7 +373,7 @@ export function ScanningPhase() {
                     setCurrentPage(1);
                   }}
                 >
-                  <SelectTrigger className="w-20">
+                  <SelectTrigger className="h-7 w-16 border-0 bg-muted text-xs" aria-label="Rows per page">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -477,32 +386,33 @@ export function ScanningPhase() {
                 </Select>
                 <span>per page</span>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1">
                 <Button
                   size="sm"
-                  variant="outline"
-                  onClick={() => setCurrentPage(page => Math.max(1, page - 1))}
-                  disabled={currentPage <= 1}
+                  variant="ghost"
+                  className="h-7 text-xs"
+                  onClick={() => setCurrentPage(Math.max(1, safePage - 1))}
+                  disabled={safePage <= 1}
                 >
                   Previous
                 </Button>
-                <span className="text-sm text-gray-600 dark:text-gray-400">
-                  Page {currentPage} of {totalPages}
+                <span className="px-2 font-mono tabular-nums">
+                  {safePage} / {totalPages}
                 </span>
                 <Button
                   size="sm"
-                  variant="outline"
-                  onClick={() => setCurrentPage(page => Math.min(totalPages, page + 1))}
-                  disabled={currentPage >= totalPages}
+                  variant="ghost"
+                  className="h-7 text-xs"
+                  onClick={() => setCurrentPage(Math.min(totalPages, safePage + 1))}
+                  disabled={safePage >= totalPages}
                 >
                   Next
                 </Button>
               </div>
             </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
+          </>
+        )}
+      </Section>
+    </>
   );
 }
