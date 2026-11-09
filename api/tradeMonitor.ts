@@ -130,6 +130,10 @@ export async function monitorActiveTrades(): Promise<void> {
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
+// 4:00 PM New York on the bar's trading day, as epoch ms. A daily bar's
+// timestamp is midnight New York time, so the close is 16 hours later.
+const sessionClose = (bar: DailyBar) => new Date(bar.date).getTime() + 16 * 3_600_000;
+
 // Invalid alerts are skipped every cycle; log each one only once.
 const reportedInvalid = new Set<number>();
 
@@ -160,10 +164,13 @@ export async function checkPriceAlerts(): Promise<void> {
       const bars = await getDailyBars(alert.symbol);
       if (!bars) continue; // lookup failed; logged by the price cache
 
-      const since = alert.createdAt ? marketDate(new Date(alert.createdAt)) : '';
+      // Only trading days whose session ended after the alert was created
+      // count; a high or low reached before the alert existed must not fire it.
+      const createdAt = alert.createdAt ? new Date(alert.createdAt).getTime() : 0;
       const completed = completedBars(bars, today);
       const index = completed.findIndex(
-        (bar) => bar.barDate >= since && (type === 'breakout' ? bar.high >= target : bar.low <= target)
+        (bar) =>
+          sessionClose(bar) > createdAt && (type === 'breakout' ? bar.high >= target : bar.low <= target)
       );
       if (index === -1) continue;
 
