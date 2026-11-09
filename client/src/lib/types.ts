@@ -1,13 +1,3 @@
-import type { LucideIcon } from 'lucide-react';
-
-export interface TradingPhase {
-  id: number;
-  name: string;
-  description: string;
-  icon: LucideIcon;
-  isActive: boolean;
-}
-
 export interface MarketData {
   spy: { price: string; change: string };
   nasdaq: { price: string; change: string };
