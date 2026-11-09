@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { AppSidebar } from './AppSidebar';
 import { SettingsDrawer } from './SettingsDrawer';
+import { DisclaimerBar } from './Disclaimer';
 
 /**
  * Signed-in application frame: persistent left sidebar plus the page area.
@@ -13,6 +14,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset>
+        <DisclaimerBar className="sticky top-0 z-20" />
         <div className="flex h-12 items-center px-4">
           <SidebarTrigger className="-ml-1 text-muted-foreground hover:text-foreground" />
         </div>

@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { AccentBar } from './primitives';
+import { DisclaimerBar } from './Disclaimer';
 
 /** Centered, container-free frame for the signed-out pages. */
 export function AuthLayout({
@@ -14,7 +15,9 @@ export function AuthLayout({
   footer?: ReactNode;
 }) {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background px-6 py-12">
+    <div className="flex min-h-screen flex-col bg-background">
+    <DisclaimerBar />
+    <main className="flex flex-1 items-center justify-center px-6 py-12">
       <div className="w-full max-w-sm">
         <div className="mb-10 flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
           <AccentBar orientation="vertical" />
@@ -26,5 +29,6 @@ export function AuthLayout({
         {footer && <div className="mt-8 text-sm text-muted-foreground">{footer}</div>}
       </div>
     </main>
+    </div>
   );
 }

@@ -202,6 +202,14 @@ export async function registerRoutes(app: Express) {
   });
 
 
+  // Record that the signed-in user accepted the not-financial-advice disclaimer.
+  app.post("/api/disclaimer/accept", safe(async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" });
+    const acceptedAt = await storage.acceptDisclaimer((req.user as { id: number }).id);
+    if (!acceptedAt) return res.status(404).json({ message: "User not found" });
+    res.json({ disclaimerAcceptedAt: acceptedAt });
+  }));
+
   // Authenticated profile retrieval
   app.get("/api/profile", async (req, res, next) => {
     if (!req.isAuthenticated() || !req.user) {

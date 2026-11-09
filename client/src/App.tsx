@@ -7,6 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { AppShell } from "@/components/layout/AppShell";
+import { DisclaimerGate } from "@/components/layout/Disclaimer";
 import Overview from "@/pages/Overview";
 import Scanner from "@/pages/Scanner";
 import Watchlists from "@/pages/Watchlists";
@@ -29,7 +30,12 @@ function AuthGate({ children }: { children: ReactNode }) {
 
   if (!user) return <Login />;
 
-  return <>{children}</>;
+  return (
+    <>
+      {children}
+      <DisclaimerGate accepted={!!user.disclaimerAcceptedAt} />
+    </>
+  );
 }
 
 function AppRoutes() {

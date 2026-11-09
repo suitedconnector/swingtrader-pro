@@ -12,6 +12,8 @@ export const users = pgTable("users", {
   verificationToken: text("verification_token"),
   emailAlerts: boolean("email_alerts").default(true),
   tradingBankroll: decimal("trading_bankroll", { precision: 12, scale: 2 }).default("0.00"),
+  // When the user accepted the not-financial-advice disclaimer (migration 0004).
+  disclaimerAcceptedAt: timestamp("disclaimer_accepted_at"),
 }, (table) => {
   return {
     emailIdx: uniqueIndex("users_email_lower_idx").on(sql`lower(${table.email})`),
