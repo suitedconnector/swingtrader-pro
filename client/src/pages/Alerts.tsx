@@ -8,6 +8,7 @@ import { apiRequest } from '@/lib/queryClient';
 import type { PriceAlert, Watchlist, ScanResult } from '@shared/schema';
 import { AccentBar, EmptyState, PageHeader, Section } from '@/components/layout/primitives';
 import { cn } from '@/lib/utils';
+import { YahooQuoteLink } from '@/components/YahooQuoteLink';
 
 type AlertType = 'breakout' | 'breakdown';
 
@@ -187,6 +188,7 @@ export default function Alerts() {
                           <span className="inline-flex items-center gap-3">
                             <AccentBar signal={alert.alertType === 'breakdown' ? 'down' : 'warn'} orientation="vertical" />
                             <span className="font-medium text-foreground">{alert.symbol}</span>
+                            <YahooQuoteLink symbol={alert.symbol} className="-ml-2" />
                           </span>
                         </td>
                         <td className="py-2.5 capitalize text-muted-foreground">{alert.alertType}</td>
@@ -229,6 +231,7 @@ export default function Alerts() {
                               orientation="vertical"
                             />
                             <span className="font-medium text-foreground">{alert.symbol}</span>
+                            <YahooQuoteLink symbol={alert.symbol} className="-ml-2" />
                           </span>
                         </td>
                         <td className="py-2.5 capitalize text-muted-foreground">{alert.alertType}</td>

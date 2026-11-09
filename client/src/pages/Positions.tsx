@@ -16,6 +16,7 @@ import { apiRequest } from '@/lib/queryClient';
 import type { Trade } from '@shared/schema';
 import { EmptyState, PageHeader, Section, Stat } from '@/components/layout/primitives';
 import { cn } from '@/lib/utils';
+import { YahooQuoteLink } from '@/components/YahooQuoteLink';
 
 const TRIM_PERCENT = 25;
 
@@ -170,7 +171,12 @@ export default function Positions() {
               <tbody className="divide-y divide-border/60">
                 {activeTrades.map((trade) => (
                   <tr key={trade.id}>
-                    <td className="py-2.5 font-medium text-foreground">{trade.symbol}</td>
+                    <td className="py-2.5">
+                      <span className="inline-flex items-center gap-1">
+                        <span className="font-medium text-foreground">{trade.symbol}</span>
+                        <YahooQuoteLink symbol={trade.symbol} />
+                      </span>
+                    </td>
                     <td className="py-2.5 text-right font-mono tabular-nums">{trade.shares}</td>
                     <td className="py-2.5 text-right font-mono tabular-nums">{price(trade.entryPrice)}</td>
                     <td className="py-2.5 text-right font-mono tabular-nums text-signal-down">{price(trade.stopLoss)}</td>
