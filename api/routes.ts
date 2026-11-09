@@ -9,6 +9,35 @@ import { updateUserProfileSchema, registerUserSchema } from "@shared/schema";
 import { sendTestAlert, sendVerificationCode, sendEmailChangeVerificationCode } from "./emailService";
 import { getHistoricalAggregates } from "./massiveService";
 import { runScansV2 } from "./scanner_pipeline";
+import { z } from "zod";
+
+// Fields a client may change on its own trade. Anything else (userId, id,
+// symbol, entry price, entry date) is rejected. Decimal columns are stored as
+// strings; exitDate arrives as an ISO string and must become a Date for the
+// timestamp column.
+const decimalField = z
+  .union([z.string(), z.number()])
+  .transform((v) => String(v).trim())
+  .refine((v) => v !== "" && Number.isFinite(Number(v)), { message: "Must be a number" })
+  .transform((v) => Number(v).toFixed(2));
+const positiveDecimal = decimalField.refine((v) => Number(v) > 0, { message: "Must be greater than 0" });
+const tradePatchSchema = z
+  .object({
+    status: z.enum(["active", "closed"]).optional(),
+    shares: z.number().int().positive().optional(),
+    riskAmount: decimalField.refine((v) => Number(v) >= 0, { message: "Must not be negative" }).optional(),
+    stopLoss: positiveDecimal.optional(),
+    profitTarget: positiveDecimal.nullable().optional(),
+    exitPrice: positiveDecimal.nullable().optional(),
+    pnl: decimalField.nullable().optional(),
+    exitReason: z.string().trim().max(50).nullable().optional(),
+    exitDate: z
+      .union([z.null(), z.coerce.date()])
+      .refine((d) => d === null || !Number.isNaN(d.getTime()), { message: "Invalid date" })
+      .optional(),
+  })
+  .strict()
+  .refine((u) => Object.keys(u).length > 0, { message: "No fields to update" });
 
 // Simple in-memory rate limiter with expiration
 const rateLimits = new Map<string, { count: number; expiresAt: number }>();
@@ -317,7 +346,22 @@ export async function registerRoutes(app: Express) {
   app.delete("/api/watchlists/:id", async (req, res) => { if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" }); const deleted = await storage.deleteWatchlist(parseInt(req.params.id), req.user.id); if (!deleted) return res.status(404).json({ message: "Not found" }); res.status(204).send(); });
   app.get("/api/trades", (req, res, next) => { if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" }); storage.getTrades(req.user.id).then(d => res.json(d)).catch(next); });
   app.post("/api/trades", async (req, res) => { if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" }); const t = await storage.createTrade({ ...req.body, userId: req.user.id }); res.status(201).json(t); });
-  app.patch("/api/trades/:id", async (req, res) => { if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" }); const t = await storage.updateTrade(parseInt(req.params.id), req.user.id, req.body); if (!t) return res.status(404).json({ message: "Not found" }); res.json(t); });
+  app.patch("/api/trades/:id", async (req, res, next) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" });
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ message: "Invalid trade id" });
+    const parsed = tradePatchSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid trade update", errors: parsed.error.flatten().fieldErrors });
+    }
+    try {
+      const t = await storage.updateTrade(id, req.user.id, parsed.data);
+      if (!t) return res.status(404).json({ message: "Not found" });
+      res.json(t);
+    } catch (err) {
+      next(err);
+    }
+  });
   app.get("/api/price-alerts", (req, res, next) => { if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" }); storage.getPriceAlerts(req.user.id).then(d => res.json(d)).catch(next); });
   app.post("/api/price-alerts", async (req, res) => { if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" }); const a = await storage.createPriceAlert({ ...req.body, userId: req.user.id }); res.status(201).json(a); });
   app.patch("/api/price-alerts/:id", async (req, res) => { if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" }); const a = await storage.updatePriceAlert(parseInt(req.params.id), req.user.id, req.body); if (!a) return res.status(404).json({ message: "Not found" }); res.json(a); });
