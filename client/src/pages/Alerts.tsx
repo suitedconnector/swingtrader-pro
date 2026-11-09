@@ -130,7 +130,7 @@ export default function Alerts() {
             ) : priceAlerts.length === 0 ? (
               <EmptyState title="No active alerts" description="Add a price level to watch for a stock on your lists." />
             ) : (
-              <div className="overflow-x-auto">
+              <div className="relative overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="text-left">

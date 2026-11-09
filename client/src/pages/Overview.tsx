@@ -151,7 +151,7 @@ export default function Overview() {
                 action={<ViewAll href="/plan">Open the trade planner →</ViewAll>}
               />
             ) : (
-              <div className="overflow-x-auto">
+              <div className="relative overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="text-left text-xs uppercase tracking-wider text-muted-foreground">
