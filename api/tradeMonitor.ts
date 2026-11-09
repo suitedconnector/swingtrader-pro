@@ -130,6 +130,9 @@ export async function monitorActiveTrades(): Promise<void> {
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
+// Invalid alerts are skipped every cycle; log each one only once.
+const reportedInvalid = new Set<number>();
+
 // Fire price alerts set on the Alerts page. A breakout fires when a completed
 // day's HIGH reaches the target, a breakdown when its LOW reaches it. Only
 // days on or after the day the alert was created count. Each alert fires
@@ -147,7 +150,10 @@ export async function checkPriceAlerts(): Promise<void> {
       const target = Number(alert.targetPrice);
       const type = alert.alertType;
       if (!Number.isFinite(target) || target <= 0 || (type !== 'breakout' && type !== 'breakdown')) {
-        console.error(`Alert checker: invalid alert ${alert.id} (${alert.symbol}); skipping.`);
+        if (!reportedInvalid.has(alert.id)) {
+          reportedInvalid.add(alert.id);
+          console.error(`Alert checker: invalid alert ${alert.id} (${alert.symbol}); skipping.`);
+        }
         continue;
       }
 
