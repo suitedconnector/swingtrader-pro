@@ -1,378 +1,340 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
+import { Link } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { apiRequest } from '@/lib/queryClient';
-import { useToast } from '@/hooks/use-toast';
-import { Watchlist } from '@/../../shared/schema';
-import type { PositionCalculation, AccountSettings } from '@/lib/types';
-import type { Trade, Stock } from '@shared/schema';
-import { Play } from 'lucide-react';
+import type { ScanResult, Trade, Watchlist } from '@shared/schema';
+import { PageHeader, Section, Stat } from '@/components/layout/primitives';
+import { cn } from '@/lib/utils';
+
+const MAX_RISK_PERCENT = 5;
+const STOP_BELOW_ENTRY = 0.08; // 8% below entry
+const REWARD_MULTIPLE = 2; // 2:1 reward to risk
+const CONCENTRATION_WARN = 30; // % of bankroll in one position
+
+const usd = (n: number, digits = 2) =>
+  n.toLocaleString('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  });
+
+const num = (v: string) => {
+  const n = Number(v);
+  return v.trim() !== '' && Number.isFinite(n) ? n : null;
+};
+
+const fieldClass = 'border-0 bg-muted font-mono';
+
+const emptyForm = { symbol: '', entryPrice: '', stopLoss: '', profitTarget: '' };
 
 export function EntryPhase() {
   const queryClient = useQueryClient();
-  const [accountSettings, setAccountSettings] = useState<AccountSettings>({
-    balance: 0,
-    defaultRiskPercent: 1,
-  });
 
-  const { data: userProfile } = useQuery<{ tradingBankroll: string }>({
+  const { data: userProfile } = useQuery<{ tradingBankroll?: string | number | null }>({
     queryKey: ['/api/profile'],
+    queryFn: async () => {
+      const res = await fetch('/api/profile', { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to fetch profile');
+      return res.json();
+    },
   });
+  const { data: trades = [] } = useQuery<Trade[]>({ queryKey: ['/api/trades'] });
+  const { data: watchlists = [] } = useQuery<Watchlist[]>({ queryKey: ['/api/watchlists'] });
+  const { data: scanResults = [] } = useQuery<ScanResult[]>({ queryKey: ['/api/scan-results'] });
 
+  // Bankroll comes from Settings; it can be overridden here for one plan.
+  const [bankroll, setBankroll] = useState('');
+  const [bankrollTouched, setBankrollTouched] = useState(false);
   useEffect(() => {
-    if (userProfile?.tradingBankroll) {
-      setAccountSettings(prev => ({ 
-        ...prev, 
-        balance: parseFloat(userProfile.tradingBankroll) || 0 
-      }));
-    }
-  }, [userProfile]);
+    const saved = Number(userProfile?.tradingBankroll);
+    if (!bankrollTouched && Number.isFinite(saved) && saved > 0) setBankroll(String(saved));
+  }, [userProfile, bankrollTouched]);
 
-  const { toast } = useToast();
+  const [riskPercent, setRiskPercent] = useState('1');
+  const [form, setForm] = useState(emptyForm);
+  const [priceNote, setPriceNote] = useState('');
+  const [isLoadingPrice, setIsLoadingPrice] = useState(false);
+  const [recorded, setRecorded] = useState<string | null>(null);
+  // Ignores a slow price lookup that finishes after another symbol was picked.
+  const priceRequest = useRef(0);
 
-  const [positionForm, setPositionForm] = useState({
-    symbol: '',
-    entryPrice: '',
-    stopLoss: '',
-    profitTarget: '',
-    riskPercent: accountSettings.defaultRiskPercent.toString(),
-  });
+  // Symbols: focus list, flagged list, other watchlists, then scan results.
+  const groups: { label: string; symbols: string[] }[] = [];
+  const seen = new Set<string>();
+  const addGroup = (label: string, symbols: string[]) => {
+    const fresh = symbols.filter((s) => s && !seen.has(s));
+    fresh.forEach((s) => seen.add(s));
+    if (fresh.length) groups.push({ label, symbols: fresh });
+  };
+  addGroup('Focus list', watchlists.find((w) => w.type === 'focus')?.symbols ?? []);
+  addGroup('Flagged list', watchlists.find((w) => w.type === 'flagged')?.symbols ?? []);
+  addGroup(
+    'Other watchlists',
+    watchlists.filter((w) => w.type !== 'focus' && w.type !== 'flagged').flatMap((w) => w.symbols ?? [])
+  );
+  addGroup('Scan results', scanResults.map((r) => r.symbol));
 
-  const [isCalculatingPrices, setIsCalculatingPrices] = useState(false);
-  const [priceCalculations, setPriceCalculations] = useState<{
-    currentPrice: number;
-    suggestedEntry: number;
-    suggestedStopLoss: number;
-    suggestedProfitTarget: number;
-    reasoning: string;
-  } | null>(null);
-
-  const [calculation, setCalculation] = useState<PositionCalculation>({
-    riskAmount: 0,
-    riskPerShare: 0,
-    numShares: 0,
-    positionValue: 0,
-    percentOfAccount: 0,
-  });
-
-  const { data: activeTrades = [] } = useQuery<Trade[]>({
-    queryKey: ['/api/trades', { active: true }],
-  });
-
-  const { data: watchlists } = useQuery<Watchlist[]>({
-    queryKey: ['/api/watchlists'],
-  });
-
-  const { data: stocks = [] } = useQuery<Stock[]>({
-    queryKey: ['/api/stocks'],
-  });
-
-  // Get all available symbols from both watchlists and stocks
-  const watchlistSymbols = watchlists?.flatMap(wl => wl.symbols || []) || [];
-  const stockSymbols = stocks.map(stock => stock.symbol);
-  const allSymbols = [...stockSymbols, ...watchlistSymbols];
-  const availableStocks = Array.from(new Set(allSymbols)).filter(symbol => symbol && symbol.length > 0);
-
-  // Function to automatically calculate entry and stop loss prices using real market data
-  const calculateOptimalPrices = async (symbol: string) => {
-    setIsCalculatingPrices(true);
-    
+  const suggestPrices = async (symbol: string) => {
+    const request = ++priceRequest.current;
+    setIsLoadingPrice(true);
+    setPriceNote('Looking up the last close…');
     try {
-      // Fetch real market data for the symbol
-      const response = await fetch(`/api/stock-price/${symbol}`);
-      const priceData = await response.json();
-      
-      if (!response.ok || !priceData.currentPrice) {
-        throw new Error(priceData.message || `Unable to fetch price data for ${symbol}`);
+      const response = await fetch(`/api/stock-price/${encodeURIComponent(symbol)}`, { credentials: 'include' });
+      const data = response.ok ? await response.json() : null;
+      if (request !== priceRequest.current) return;
+      const last = Number(data?.currentPrice);
+      const entry = Number(data?.suggestedBreakout);
+      if (Number.isFinite(entry) && entry > 0) {
+        const stop = entry * (1 - STOP_BELOW_ENTRY);
+        const target = entry + (entry - stop) * REWARD_MULTIPLE;
+        setForm((prev) => ({
+          ...prev,
+          entryPrice: entry.toFixed(2),
+          stopLoss: stop.toFixed(2),
+          profitTarget: target.toFixed(2),
+        }));
+        setPriceNote(
+          `Suggested from the last close${Number.isFinite(last) ? ` (${last.toFixed(2)})` : ''}: breakout entry, stop 8% below, target at 2:1. Adjust to your chart.`
+        );
+      } else {
+        setPriceNote('No recent price available. Enter entry, stop and target yourself.');
       }
-      
-      const currentPrice = parseFloat(priceData.currentPrice);
-      const suggestedEntry = parseFloat(priceData.suggestedBreakout);
-      
-      // Calculate stop loss: 8% below entry (conservative swing trading rule)
-      const suggestedStopLoss = suggestedEntry * 0.92;
-      
-      // Calculate profit target: 2:1 risk/reward ratio
-      const riskPerShare = suggestedEntry - suggestedStopLoss;
-      const suggestedProfitTarget = suggestedEntry + (riskPerShare * 2);
-      
-      let reasoning = `Entry: $${suggestedEntry.toFixed(2)} (breakout). `;
-      reasoning += `Stop: $${suggestedStopLoss.toFixed(2)} (8% below entry). `;
-      reasoning += `Target: $${suggestedProfitTarget.toFixed(2)} (2:1 risk/reward).`;
-      
-      const calculations = {
-        currentPrice,
-        suggestedEntry,
-        suggestedStopLoss,
-        suggestedProfitTarget,
-        reasoning
-      };
-      
-      setPriceCalculations(calculations);
-      
-      // Auto-populate the form
-      setPositionForm(prev => ({
-        ...prev,
-        entryPrice: suggestedEntry.toFixed(2),
-        stopLoss: suggestedStopLoss.toFixed(2),
-        profitTarget: suggestedProfitTarget.toFixed(2)
-      }));
-      
-    } catch (error: any) {
-      console.error('Error calculating prices:', error);
-      toast({
-        title: "Calculation Error",
-        description: error.message || "Failed to calculate optimal prices",
-        variant: "destructive",
-      });
+    } catch {
+      if (request === priceRequest.current) setPriceNote('No recent price available. Enter entry, stop and target yourself.');
     } finally {
-      setIsCalculatingPrices(false);
+      if (request === priceRequest.current) setIsLoadingPrice(false);
     }
   };
 
+  const handleSymbol = (symbol: string) => {
+    setRecorded(null);
+    setForm({ ...emptyForm, symbol });
+    suggestPrices(symbol);
+  };
+
+  // Position sizing
+  const balance = num(bankroll) ?? 0;
+  const riskPct = num(riskPercent);
+  const entry = num(form.entryPrice);
+  const stop = num(form.stopLoss);
+  const target = num(form.profitTarget);
+
+  const riskPctValid = riskPct !== null && riskPct > 0 && riskPct <= MAX_RISK_PERCENT;
+  const stopValid = entry !== null && stop !== null && stop > 0 && stop < entry;
+  const targetValid = target === null || (entry !== null && target > entry);
+
+  const riskAmount = balance > 0 && riskPctValid ? balance * (riskPct! / 100) : 0;
+  const riskPerShare = stopValid ? entry! - stop! : 0;
+  const shares = riskPerShare > 0 ? Math.floor(riskAmount / riskPerShare) : 0;
+  const positionValue = entry !== null ? shares * entry : 0;
+  const percentOfAccount = balance > 0 ? (positionValue / balance) * 100 : 0;
+  // Risk actually taken after rounding down to whole shares.
+  const actualRisk = shares * riskPerShare;
+  const rewardMultiple = stopValid && target !== null && targetValid ? (target - entry!) / riskPerShare : null;
+
+  const openRisk = trades
+    .filter((t) => t.status === 'active')
+    .reduce((sum, t) => sum + (Number(t.riskAmount) || 0), 0);
+  const openRiskPct = balance > 0 ? (openRisk / balance) * 100 : null;
+  const riskAfterPct = balance > 0 ? ((openRisk + actualRisk) / balance) * 100 : null;
+
+  const canRecord = Boolean(form.symbol) && stopValid && targetValid && shares > 0;
+
   const createTradeMutation = useMutation({
-    mutationFn: (tradeData: {
-      symbol: string;
-      entryPrice: string;
-      stopLoss: string;
-      profitTarget: string;
-      shares: number;
-      riskAmount: string;
-    }) =>
+    mutationFn: () =>
       apiRequest('POST', '/api/trades', {
-        symbol: tradeData.symbol.toUpperCase(),
-        entryPrice: tradeData.entryPrice,
-        stopLoss: tradeData.stopLoss,
-        profitTarget: tradeData.profitTarget,
-        shares: tradeData.shares,
-        riskAmount: tradeData.riskAmount,
+        symbol: form.symbol.toUpperCase(),
+        entryPrice: entry!.toFixed(2),
+        stopLoss: stop!.toFixed(2),
+        profitTarget: target !== null ? target.toFixed(2) : null,
+        shares,
+        riskAmount: actualRisk.toFixed(2),
         status: 'active',
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/trades'] });
-      setPositionForm({
-        symbol: '',
-        entryPrice: '',
-        stopLoss: '',
-        profitTarget: '',
-        riskPercent: accountSettings.defaultRiskPercent.toString(),
-      });
+      setRecorded(`${shares} ${form.symbol}`);
+      setForm(emptyForm);
+      setPriceNote('');
     },
   });
 
-  useEffect(() => {
-    const entryPrice = parseFloat(positionForm.entryPrice) || 0;
-    const stopLoss = parseFloat(positionForm.stopLoss) || 0;
-    const riskPercent = parseFloat(positionForm.riskPercent) || 1;
-
-    const riskAmount = accountSettings.balance * (riskPercent / 100);
-    const riskPerShare = entryPrice - stopLoss;
-    const numShares = riskPerShare > 0 ? Math.floor(riskAmount / riskPerShare) : 0;
-    const positionValue = numShares * entryPrice;
-    const percentOfAccount = (positionValue / accountSettings.balance) * 100;
-
-    setCalculation({
-      riskAmount,
-      riskPerShare,
-      numShares,
-      positionValue,
-      percentOfAccount,
-    });
-  }, [positionForm, accountSettings.balance]);
-
-  const handleExecuteTrade = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (positionForm.symbol && positionForm.entryPrice && positionForm.stopLoss && calculation.numShares > 0) {
-      createTradeMutation.mutate({
-        symbol: positionForm.symbol,
-        entryPrice: positionForm.entryPrice,
-        stopLoss: positionForm.stopLoss,
-        profitTarget: positionForm.profitTarget,
-        shares: calculation.numShares,
-        riskAmount: calculation.riskAmount.toFixed(2),
-      });
-    }
+    if (canRecord) createTradeMutation.mutate();
   };
 
-  const totalRiskUsed = activeTrades.reduce((total, trade) => total + Number(trade.riskAmount), 0);
-  const riskPercentUsed = (totalRiskUsed / accountSettings.balance) * 100;
-
   return (
-    <div className="bg-white dark:bg-dark-surface rounded-xl shadow-sm border border-gray-200 dark:border-dark-border p-6">
-      <h3 className="text-lg font-semibold mb-4 flex items-center">
-        <Play className="inline-block shrink-0 h-4 w-4 text-trading-primary mr-2" aria-hidden="true" />
-        Phase 4: Entry Execution & Position Sizing
-      </h3>
+    <>
+      <PageHeader title="Trade Planner" description="Size a position from your bankroll and the risk you take per trade." />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="space-y-4">
-          <h4 className="font-medium text-gray-900 dark:text-white">Position Size Calculator</h4>
-          <form onSubmit={handleExecuteTrade} className="space-y-3">
-            <div>
-              <Label htmlFor="accountBalance">Account Balance</Label>
-              <Input
-                id="accountBalance"
-                type="number"
-                value={accountSettings.balance}
-                onChange={(e) => setAccountSettings(prev => ({ 
-                  ...prev, 
-                  balance: parseFloat(e.target.value) || 0 
-                }))}
-                placeholder="Enter your account balance"
-              />
-            </div>
-            <div>
-              <Label htmlFor="riskPercent">Risk Percentage (%)</Label>
-              <Input
-                id="riskPercent"
-                type="number"
-                max="5"
-                step="0.1"
-                value={positionForm.riskPercent}
-                onChange={(e) => setPositionForm(prev => ({ ...prev, riskPercent: e.target.value }))}
-              />
-            </div>
-            <div>
-              <Label htmlFor="symbol">Stock Symbol</Label>
-              <Select 
-                value={positionForm.symbol} 
-                onValueChange={(value) => {
-                  setPositionForm(prev => ({ ...prev, symbol: value }));
-                  setPriceCalculations(null);
-                  // Automatically calculate prices when stock is selected
-                  if (value) {
-                    calculateOptimalPrices(value);
-                  }
-                }}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Choose from watchlist" />
-                </SelectTrigger>
-                <SelectContent position="popper">
-                  {availableStocks.map((symbol) => (
-                    <SelectItem key={symbol} value={symbol}>
-                      {symbol}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {priceCalculations && (
-              <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 space-y-2">
-                <h5 className="font-medium text-blue-900 dark:text-blue-100">Automated Price Analysis</h5>
-                <div className="text-sm space-y-1">
-                  <div>Current Price: <span className="font-mono">${priceCalculations.currentPrice.toFixed(2)}</span></div>
-                  <div>Suggested Entry: <span className="font-mono text-green-600">${priceCalculations.suggestedEntry.toFixed(2)}</span></div>
-                  <div>Suggested Stop: <span className="font-mono text-red-600">${priceCalculations.suggestedStopLoss.toFixed(2)}</span></div>
-                  <div>Profit Target: <span className="font-mono text-blue-600">${priceCalculations.suggestedProfitTarget.toFixed(2)}</span></div>
-                  <p className="text-xs text-blue-700 dark:text-blue-300 mt-2">{priceCalculations.reasoning}</p>
-                </div>
+      <div className="grid gap-x-16 lg:grid-cols-5">
+        <form onSubmit={handleSubmit} className="min-w-0 lg:col-span-3" noValidate>
+          <Section title="Trade">
+            <div className="space-y-5">
+              <div className="space-y-2">
+                <Label htmlFor="symbol">Symbol</Label>
+                <Select value={form.symbol} onValueChange={handleSymbol} disabled={groups.length === 0}>
+                  <SelectTrigger id="symbol" className="w-full border-0 bg-muted">
+                    <SelectValue placeholder={groups.length ? 'Choose a symbol' : 'No symbols yet'} />
+                  </SelectTrigger>
+                  <SelectContent position="popper">
+                    {groups.map((group) => (
+                      <SelectGroup key={group.label}>
+                        <SelectLabel className="text-xs font-normal text-muted-foreground">{group.label}</SelectLabel>
+                        {group.symbols.map((symbol) => (
+                          <SelectItem key={symbol} value={symbol}>
+                            {symbol}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {groups.length === 0 && (
+                  <p className="text-xs text-muted-foreground">Run a scan or add stocks to a watchlist first.</p>
+                )}
               </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                {(
+                  [
+                    ['entryPrice', 'Entry'],
+                    ['stopLoss', 'Stop'],
+                    ['profitTarget', 'Target'],
+                  ] as const
+                ).map(([key, label]) => (
+                  <div key={key} className="space-y-2">
+                    <Label htmlFor={key}>{label}</Label>
+                    <Input
+                      id={key}
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      inputMode="decimal"
+                      placeholder={key === 'profitTarget' ? 'Optional' : '0.00'}
+                      value={form[key]}
+                      onChange={(e) => {
+                        setRecorded(null);
+                        setForm((prev) => ({ ...prev, [key]: e.target.value }));
+                      }}
+                      className={fieldClass}
+                    />
+                  </div>
+                ))}
+              </div>
+              {priceNote && <p className="text-xs text-muted-foreground">{priceNote}</p>}
+              {entry !== null && stop !== null && !stopValid && (
+                <p className="text-xs text-signal-down">The stop must be above 0 and below the entry.</p>
+              )}
+              {!targetValid && <p className="text-xs text-signal-down">The target must be above the entry.</p>}
+            </div>
+          </Section>
+
+          <Section title="Risk">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="bankroll">Bankroll</Label>
+                <Input
+                  id="bankroll"
+                  type="number"
+                  min="0"
+                  inputMode="decimal"
+                  value={bankroll}
+                  onChange={(e) => {
+                    setBankrollTouched(true);
+                    setBankroll(e.target.value);
+                  }}
+                  placeholder="Set in Settings"
+                  className={fieldClass}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="riskPercent">Risk per trade (%)</Label>
+                <Input
+                  id="riskPercent"
+                  type="number"
+                  min="0.1"
+                  max={MAX_RISK_PERCENT}
+                  step="0.1"
+                  inputMode="decimal"
+                  value={riskPercent}
+                  onChange={(e) => setRiskPercent(e.target.value)}
+                  className={fieldClass}
+                />
+              </div>
+            </div>
+            {!riskPctValid && (
+              <p className="pt-2 text-xs text-signal-down">Risk per trade must be above 0 and at most {MAX_RISK_PERCENT}%.</p>
             )}
+            {bankrollTouched && (
+              <p className="pt-2 text-xs text-muted-foreground">This change applies to this plan only. Your saved bankroll is in Settings.</p>
+            )}
+          </Section>
+        </form>
 
-            <div>
-              <Label htmlFor="entryPrice">Entry Price ($)</Label>
-              <Input
-                id="entryPrice"
-                type="number"
-                step="0.01"
-                value={positionForm.entryPrice}
-                onChange={(e) => setPositionForm(prev => ({ ...prev, entryPrice: e.target.value }))}
-                placeholder="Auto-calculated or manual entry"
-                className={priceCalculations ? 'bg-green-50 dark:bg-green-900/20' : ''}
+        <div className="min-w-0 lg:col-span-2">
+          <Section title="Position">
+            <div className="grid grid-cols-2 gap-x-8 gap-y-8">
+              <Stat label="Shares" value={shares} signal={shares > 0 ? 'info' : undefined} />
+              <Stat label="Risk" value={usd(actualRisk)} hint={riskPerShare > 0 ? `${usd(riskPerShare)} per share` : undefined} />
+              <Stat
+                label="Position value"
+                value={usd(positionValue, 0)}
+                hint={balance > 0 ? `${percentOfAccount.toFixed(1)}% of bankroll` : undefined}
+                signal={percentOfAccount > CONCENTRATION_WARN ? 'warn' : undefined}
               />
+              <Stat label="Reward : risk" value={rewardMultiple !== null ? `${rewardMultiple.toFixed(1)} : 1` : '—'} />
             </div>
-            <div>
-              <Label htmlFor="stopLoss">Stop Loss Price ($)</Label>
-              <Input
-                id="stopLoss"
-                type="number"
-                step="0.01"
-                value={positionForm.stopLoss}
-                onChange={(e) => setPositionForm(prev => ({ ...prev, stopLoss: e.target.value }))}
-                placeholder="Auto-calculated or manual entry"
-                className={priceCalculations ? 'bg-red-50 dark:bg-red-900/20' : ''}
-              />
-            </div>
-            <div>
-              <Label htmlFor="profitTarget">Profit Target ($)</Label>
-              <Input
-                id="profitTarget"
-                type="number"
-                step="0.01"
-                value={positionForm.profitTarget}
-                onChange={(e) => setPositionForm(prev => ({ ...prev, profitTarget: e.target.value }))}
-                placeholder="Auto-calculated or manual entry"
-                className={priceCalculations ? 'bg-blue-50 dark:bg-blue-900/20' : ''}
-              />
-            </div>
-          </form>
-        </div>
+          </Section>
 
-        <div className="space-y-4">
-          <h4 className="font-medium text-gray-900 dark:text-white">Calculated Results</h4>
-          <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 space-y-3">
-            <div className="flex justify-between">
-              <span className="text-sm text-gray-600 dark:text-gray-400">Risk Amount:</span>
-              <span className="text-sm font-mono font-medium text-trading-error">
-                ${calculation.riskAmount.toFixed(2)}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-sm text-gray-600 dark:text-gray-400">Risk Per Share:</span>
-              <span className="text-sm font-mono font-medium">
-                ${calculation.riskPerShare.toFixed(2)}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-sm text-gray-600 dark:text-gray-400">Number of Shares:</span>
-              <span className="text-sm font-mono font-medium text-trading-primary">
-                {calculation.numShares}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-sm text-gray-600 dark:text-gray-400">Position Value:</span>
-              <span className="text-sm font-mono font-medium">
-                ${calculation.positionValue.toFixed(2)}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-sm text-gray-600 dark:text-gray-400">% of Account:</span>
-              <span className={`text-sm font-mono font-medium ${calculation.percentOfAccount > 30 ? 'text-trading-warning' : ''}`}>
-                {calculation.percentOfAccount.toFixed(2)}%
-              </span>
-            </div>
-          </div>
+          <Section title="Open risk">
+            <p className="text-sm text-muted-foreground">
+              Now <span className="font-mono tabular-nums text-foreground">{usd(openRisk, 0)}</span>
+              {openRiskPct !== null && <span> ({openRiskPct.toFixed(1)}%)</span>}
+              {shares > 0 && riskAfterPct !== null && (
+                <>
+                  {' '}
+                  · after this trade{' '}
+                  <span className="font-mono tabular-nums text-foreground">{riskAfterPct.toFixed(1)}%</span>
+                </>
+              )}
+            </p>
+          </Section>
 
-          <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
-            <h5 className="font-medium text-trading-primary mb-2">Current Risk Usage</h5>
-            <div className="flex justify-between text-sm">
-              <span>Total Risk Used:</span>
-              <span className="font-mono">${totalRiskUsed.toFixed(2)} ({riskPercentUsed.toFixed(2)}%)</span>
-            </div>
-          </div>
-
-          {calculation.percentOfAccount > 30 && (
-            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
-              <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                ⚠️ Position size exceeds 30% of account. Consider reducing position before end of day.
-              </p>
-            </div>
+          {percentOfAccount > CONCENTRATION_WARN && (
+            <p className="pb-4 text-xs text-signal-warn">
+              This position is over {CONCENTRATION_WARN}% of your bankroll. Consider a smaller size.
+            </p>
           )}
 
           <Button
-            onClick={handleExecuteTrade}
-            disabled={createTradeMutation.isPending || calculation.numShares === 0}
+            type="button"
             className="w-full"
+            onClick={() => canRecord && createTradeMutation.mutate()}
+            disabled={!canRecord || isLoadingPrice || createTradeMutation.isPending}
           >
-            {createTradeMutation.isPending ? 'Executing Trade...' : 'Execute Trade'}
+            {createTradeMutation.isPending ? 'Saving…' : 'Add to positions'}
           </Button>
+          <p className="pt-2 text-xs text-muted-foreground">Records the trade here. It does not place an order with a broker.</p>
+          {createTradeMutation.isError && (
+            <p className="pt-2 text-xs text-signal-down">Could not save the trade. Try again.</p>
+          )}
+          {recorded && (
+            <p className={cn('pt-2 text-xs text-foreground')}>
+              Added {recorded} shares.{' '}
+              <Link href="/positions" className="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
+                View positions →
+              </Link>
+            </p>
+          )}
         </div>
       </div>
-    </div>
+    </>
   );
 }
