@@ -4,21 +4,15 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { apiRequest } from '@/lib/queryClient';
 import { AuthLayout } from '@/components/layout/AuthLayout';
 import { cn } from '@/lib/utils';
-
-type Method = 'password' | 'code';
 
 const fieldClass = 'border-0 bg-muted';
 
 export default function Login() {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [showCodeInput, setShowCodeInput] = useState(false);
-  const [loginMethod, setLoginMethod] = useState<Method>('password');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [, setLocation] = useLocation();
@@ -27,20 +21,6 @@ export default function Login() {
   const signedIn = async () => {
     await queryClient.invalidateQueries({ queryKey: ['/api/user'] });
     setLocation('/');
-  };
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setBusy(true);
-    try {
-      await apiRequest('POST', '/api/login', { username, password });
-      await signedIn();
-    } catch (err: any) {
-      setError(err?.message ? `Sign-in failed: ${err.message}` : 'Sign-in failed.');
-    } finally {
-      setBusy(false);
-    }
   };
 
   const sendCode = async (e: React.FormEvent) => {
@@ -85,15 +65,10 @@ export default function Login() {
     }
   };
 
-  const switchMethod = (m: Method) => {
-    setLoginMethod(m);
-    setError('');
-  };
-
   return (
     <AuthLayout
       title="Sign in"
-      description="Welcome back."
+      description="We'll email you a 6-digit code."
       footer={
         <>
           No account yet?{' '}
@@ -103,57 +78,7 @@ export default function Login() {
         </>
       }
     >
-      <div className="mb-6 inline-flex rounded-md bg-muted p-0.5" role="tablist" aria-label="Sign-in method">
-        {(
-          [
-            ['password', 'Password'],
-            ['code', 'Email code'],
-          ] as const
-        ).map(([m, label]) => (
-          <button
-            key={m}
-            type="button"
-            role="tab"
-            aria-selected={loginMethod === m}
-            onClick={() => switchMethod(m)}
-            className={cn(
-              'rounded px-3 py-1 text-xs transition-colors',
-              loginMethod === m ? 'bg-background text-foreground' : 'text-muted-foreground hover:text-foreground'
-            )}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {loginMethod === 'password' ? (
-        <form onSubmit={handleLogin} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="username">Username</Label>
-            <Input
-              id="username"
-              autoComplete="username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              className={fieldClass}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
-            <Input
-              id="password"
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className={fieldClass}
-            />
-          </div>
-          <Button type="submit" className="w-full" disabled={busy || !username || !password}>
-            {busy ? 'Signing in…' : 'Sign in'}
-          </Button>
-        </form>
-      ) : !showCodeInput ? (
+      {!showCodeInput ? (
         <form onSubmit={sendCode} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
@@ -161,6 +86,7 @@ export default function Login() {
               id="email"
               type="email"
               autoComplete="email"
+              autoFocus
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className={fieldClass}
@@ -181,6 +107,7 @@ export default function Login() {
               id="code"
               inputMode="numeric"
               autoComplete="one-time-code"
+              autoFocus
               value={code}
               onChange={(e) => setCode(e.target.value)}
               className={cn(fieldClass, 'font-mono tracking-widest')}
