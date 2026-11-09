@@ -1,117 +1,42 @@
 import { storage } from './storage';
 import { sendPriceAlertEmail } from './emailService';
-import { getHistoricalAggregates } from './massiveService';
+import { getDailyBars, marketDate, type DailyBar } from './priceCache';
+import type { PriceAlert, User } from '../shared/schema';
 
-// Check active trades every 30 seconds; the next cycle is scheduled only
-// after the current one finishes, so cycles never overlap.
+// Check active trades and price alerts every 30 seconds; the next cycle is
+// scheduled only after the current one finishes, so cycles never overlap.
+// Prices come from the shared daily cache (api/priceCache.ts), so each
+// symbol costs at most one provider request per New York trading date.
 const MONITOR_INTERVAL_MS = 30_000;
-
-// How far back to look for the latest completed daily bar. Ten calendar days
-// covers weekends and market holidays.
-const LOOKBACK_DAYS = 10;
-
-const MARKET_TIME_ZONE = 'America/New_York';
 
 interface DailyClose {
   price: number;
   barDate: string; // YYYY-MM-DD trading day of the bar, in New York time
 }
 
-// YYYY-MM-DD for the given instant, in New York (exchange) time.
-function marketDate(date: Date): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: MARKET_TIME_ZONE,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(date);
+// Completed daily bars only: any bar dated today (New York time) is ignored,
+// even after the close, so an unfinished bar is never used.
+function completedBars(bars: DailyBar[], today: string): DailyBar[] {
+  return bars.filter((bar) => bar.barDate < today);
 }
 
-// In-memory cache of completed daily closes, keyed by "SYMBOL|YYYY-MM-DD"
-// (New York trading date of the check). A completed bar cannot change during
-// the day, so each symbol is fetched once per New York date. Only valid
-// prices are stored; failed requests and invalid prices are retried on the
-// next cycle. Entries from earlier dates are dropped when the date changes.
-const dailyCloseCache = new Map<string, DailyClose>();
-
-function cacheKey(symbol: string, today: string): string {
-  return `${symbol}|${today}`;
-}
-
-// Request recent daily bars for one symbol and return the close of the most
-// recent COMPLETED bar: any bar dated today (New York time) is ignored, even
-// after the close, so an unfinished bar is never used. Returns null when no
-// completed bar has a finite, positive close. Throws if the request fails.
-export async function fetchCompletedDailyClose(
-  symbol: string,
-  apiKey: string,
-  now: Date = new Date()
-): Promise<DailyClose | null> {
-  const today = marketDate(now);
-  const start = marketDate(new Date(now.getTime() - LOOKBACK_DAYS * 24 * 60 * 60 * 1000));
-
-  const bars = await getHistoricalAggregates(symbol, apiKey, start, today);
-
-  const completed = bars
-    .map((bar: { date: string; close: number }) => ({
-      barDate: marketDate(new Date(bar.date)),
-      price: Number(bar.close),
-    }))
-    .filter((bar: DailyClose) => bar.barDate < today);
-
-  const latest: DailyClose | undefined = completed[completed.length - 1];
-
-  if (!latest || !Number.isFinite(latest.price) || latest.price <= 0) {
-    return null;
-  }
-
-  return latest;
-}
-
-// Price each unique symbol once per cycle, reusing today's cached close when
-// available. Symbols without a valid price are left out, so their trades are
-// skipped for this cycle instead of being closed.
+// The close of each symbol's most recent completed bar. Symbols without a
+// valid price are left out, so their trades are skipped for this cycle
+// instead of being closed.
 async function getCurrentPrices(symbols: string[]): Promise<Map<string, DailyClose>> {
   const prices = new Map<string, DailyClose>();
-  const apiKey = process.env.MASSIVE_API_KEY;
-
-  if (!apiKey) {
-    console.error('Trade monitor: MASSIVE_API_KEY is not configured; skipping this cycle.');
-    return prices;
-  }
-
-  const now = new Date();
-  const today = marketDate(now);
-
-  // New York date changed: drop closes cached for earlier dates.
-  for (const key of Array.from(dailyCloseCache.keys())) {
-    if (!key.endsWith(`|${today}`)) dailyCloseCache.delete(key);
-  }
+  const today = marketDate(new Date());
 
   for (const symbol of Array.from(new Set(symbols))) {
-    const key = cacheKey(symbol, today);
-    const cached = dailyCloseCache.get(key);
-    if (cached) {
-      prices.set(symbol, cached);
+    const bars = await getDailyBars(symbol);
+    if (!bars) continue; // lookup failed; logged by the price cache
+    const completed = completedBars(bars, today);
+    const latest = completed[completed.length - 1];
+    if (!latest) {
+      console.error(`Trade monitor: no completed daily bar for ${symbol}; skipping this quote.`);
       continue;
     }
-
-    try {
-      const latest = await fetchCompletedDailyClose(symbol, apiKey, now);
-
-      if (!latest) {
-        console.error(`Trade monitor: no valid completed daily bar for ${symbol}; skipping this quote.`);
-        continue;
-      }
-
-      console.log(
-        `Trade monitor: ${symbol} close $${latest.price.toFixed(2)} from completed daily bar ${latest.barDate} (cached for ${today})`
-      );
-      dailyCloseCache.set(key, latest);
-      prices.set(symbol, latest);
-    } catch (error) {
-      console.error(`Trade monitor: could not get a price for ${symbol}; skipping this quote:`, error);
-    }
+    prices.set(symbol, { price: latest.close, barDate: latest.barDate });
   }
 
   return prices;
@@ -203,6 +128,77 @@ export async function monitorActiveTrades(): Promise<void> {
   }
 }
 
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+// Fire price alerts set on the Alerts page. A breakout fires when a completed
+// day's HIGH reaches the target, a breakdown when its LOW reaches it. Only
+// days on or after the day the alert was created count. Each alert fires
+// once: it is switched off and its fired date and price are saved before the
+// email goes out, so a failed email never causes a repeat.
+export async function checkPriceAlerts(): Promise<void> {
+  const alerts = await storage.getAllActivePriceAlerts();
+  if (alerts.length === 0) return;
+
+  const today = marketDate(new Date());
+  const owners = new Map<number, User | undefined>();
+
+  for (const alert of alerts) {
+    try {
+      const target = Number(alert.targetPrice);
+      const type = alert.alertType;
+      if (!Number.isFinite(target) || target <= 0 || (type !== 'breakout' && type !== 'breakdown')) {
+        console.error(`Alert checker: invalid alert ${alert.id} (${alert.symbol}); skipping.`);
+        continue;
+      }
+
+      const bars = await getDailyBars(alert.symbol);
+      if (!bars) continue; // lookup failed; logged by the price cache
+
+      const since = alert.createdAt ? marketDate(new Date(alert.createdAt)) : '';
+      const completed = completedBars(bars, today);
+      const index = completed.findIndex(
+        (bar) => bar.barDate >= since && (type === 'breakout' ? bar.high >= target : bar.low <= target)
+      );
+      if (index === -1) continue;
+
+      const bar = completed[index];
+      const trigger = type === 'breakout' ? bar.high : bar.low;
+      const fired = await markFired(alert, trigger, bar);
+      if (!fired) continue; // already fired or deleted meanwhile
+
+      console.log(
+        `Alert checker: ${alert.symbol} ${type} alert ${alert.id} fired at $${trigger.toFixed(2)} (target $${target.toFixed(2)}, bar ${bar.barDate})`
+      );
+
+      if (!owners.has(alert.userId)) owners.set(alert.userId, await storage.getUser(alert.userId));
+      const owner = owners.get(alert.userId);
+      if (!owner?.email || owner.emailAlerts === false) continue;
+
+      const prev = index > 0 ? completed[index - 1] : undefined;
+      const changePercent = prev && prev.close > 0 ? ((bar.close - prev.close) / prev.close) * 100 : 0;
+      try {
+        await sendPriceAlertEmail({
+          to: owner.email,
+          symbol: alert.symbol,
+          currentPrice: round2(trigger),
+          targetPrice: round2(target),
+          alertType: type,
+          changePercent,
+        });
+      } catch (emailError) {
+        console.error(`Alert checker: failed to send email for alert ${alert.id}:`, emailError);
+      }
+    } catch (error) {
+      console.error(`Alert checker: error processing alert ${alert.id}:`, error);
+    }
+  }
+}
+
+function markFired(alert: PriceAlert, trigger: number, bar: DailyBar) {
+  // firedAt is the start of the trading day that crossed the level.
+  return storage.markPriceAlertFired(alert.id, trigger.toFixed(2), new Date(bar.date));
+}
+
 export function startTradeMonitoring(): void {
   console.log('Starting trade monitoring system...');
 
@@ -211,6 +207,11 @@ export function startTradeMonitoring(): void {
       await monitorActiveTrades();
     } catch (error) {
       console.error('Trade monitor: unexpected error in monitoring cycle:', error);
+    }
+    try {
+      await checkPriceAlerts();
+    } catch (error) {
+      console.error('Alert checker: unexpected error in monitoring cycle:', error);
     } finally {
       setTimeout(run, MONITOR_INTERVAL_MS);
     }

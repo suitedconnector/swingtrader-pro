@@ -33,6 +33,8 @@ export interface IStorage {
   updateTrade(id: number, userId: number, updates: TradeUpdate): Promise<Trade | undefined>;
   getPriceAlerts(userId: number): Promise<PriceAlert[]>;
   getActivePriceAlerts(userId: number): Promise<PriceAlert[]>;
+  getAllActivePriceAlerts(): Promise<PriceAlert[]>;
+  markPriceAlertFired(id: number, firedPrice: string, firedAt: Date): Promise<PriceAlert | undefined>;
   createPriceAlert(alert: InsertPriceAlert): Promise<PriceAlert>;
   updatePriceAlert(id: number, userId: number, updates: Partial<InsertPriceAlert>): Promise<PriceAlert | undefined>;
   deletePriceAlert(id: number, userId: number): Promise<boolean>;
@@ -134,6 +136,19 @@ export class DatabaseStorage implements IStorage {
   }
   async getActivePriceAlerts(userId: number): Promise<PriceAlert[]> {
     return await db.select().from(priceAlerts).where(and(eq(priceAlerts.isActive, true), eq(priceAlerts.userId, userId)));
+  }
+  // All users' active alerts (each includes userId), for the background alert checker only.
+  async getAllActivePriceAlerts(): Promise<PriceAlert[]> {
+    return await db.select().from(priceAlerts).where(eq(priceAlerts.isActive, true));
+  }
+  // Turns an active alert off and records when and at what price it fired.
+  // Returns undefined if it was already off or deleted, so it never fires twice.
+  async markPriceAlertFired(id: number, firedPrice: string, firedAt: Date): Promise<PriceAlert | undefined> {
+    const [alert] = await db.update(priceAlerts)
+      .set({ isActive: false, firedPrice, firedAt })
+      .where(and(eq(priceAlerts.id, id), eq(priceAlerts.isActive, true)))
+      .returning();
+    return alert || undefined;
   }
   async createPriceAlert(insertAlert: InsertPriceAlert): Promise<PriceAlert> {
     const [alert] = await db.insert(priceAlerts).values({ ...insertAlert, userId: insertAlert.userId }).returning();

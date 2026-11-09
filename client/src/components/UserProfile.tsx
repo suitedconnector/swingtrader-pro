@@ -271,7 +271,7 @@ export function UserProfile() {
         <div className="flex items-center justify-between gap-4">
           <div>
             <Label htmlFor="email-alerts">Email alerts</Label>
-            <p className={`${hint} mt-1`}>Breakout, stop-loss and target emails.</p>
+            <p className={`${hint} mt-1`}>Price alerts, and positions hitting their stop or target.</p>
           </div>
           <Switch
             id="email-alerts"

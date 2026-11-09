@@ -18,6 +18,10 @@ const price = (v: string | number | null | undefined) => {
   return v === null || v === undefined || v === '' || !Number.isFinite(n) ? '—' : n.toFixed(2);
 };
 
+// Fired dates are the start of a trading day in New York; show that day.
+const tradingDay = (d: Date | string | null | undefined) =>
+  d ? new Date(d).toLocaleDateString(undefined, { timeZone: 'America/New_York' }) : '—';
+
 export default function Alerts() {
   const queryClient = useQueryClient();
   const [alertForm, setAlertForm] = useState({
@@ -27,13 +31,18 @@ export default function Alerts() {
   });
   const [isLoadingPrice, setIsLoadingPrice] = useState(false);
   const [priceNote, setPriceNote] = useState('');
+  // Last close of the chosen symbol, for the already-crossed warning.
+  const [lastClose, setLastClose] = useState<number | null>(null);
   // Ignores a slow price lookup that finishes after another symbol was picked.
   const priceRequest = useRef(0);
 
-  const { data: priceAlerts = [], isLoading: alertsLoading } = useQuery<PriceAlert[]>({
+  const { data: allAlerts = [], isLoading: alertsLoading } = useQuery<PriceAlert[]>({
     queryKey: ['/api/price-alerts'],
-    select: (data) => data.filter((alert) => alert.isActive),
   });
+  const priceAlerts = allAlerts.filter((alert) => alert.isActive);
+  const firedAlerts = allAlerts
+    .filter((alert) => !alert.isActive && alert.firedAt)
+    .sort((a, b) => new Date(b.firedAt!).getTime() - new Date(a.firedAt!).getTime());
 
   const { data: watchlists = [] } = useQuery<Watchlist[]>({
     queryKey: ['/api/watchlists'],
@@ -68,6 +77,7 @@ export default function Alerts() {
       queryClient.invalidateQueries({ queryKey: ['/api/price-alerts'] });
       setAlertForm({ symbol: '', targetPrice: '', alertType: 'breakout' });
       setPriceNote('');
+      setLastClose(null);
     },
   });
 
@@ -80,6 +90,10 @@ export default function Alerts() {
 
   const targetNum = Number(alertForm.targetPrice);
   const targetValid = alertForm.targetPrice.trim() !== '' && Number.isFinite(targetNum) && targetNum > 0;
+  const alreadyCrossed =
+    targetValid &&
+    lastClose !== null &&
+    (alertForm.alertType === 'breakout' ? targetNum <= lastClose : targetNum >= lastClose);
 
   const handleCreateAlert = (e: React.FormEvent) => {
     e.preventDefault();
@@ -92,6 +106,7 @@ export default function Alerts() {
     if (!symbol) return;
     const request = ++priceRequest.current;
     setIsLoadingPrice(true);
+    setLastClose(null);
     setPriceNote('Looking up a suggested breakout level…');
     try {
       const response = await fetch(`/api/stock-price/${encodeURIComponent(symbol.toUpperCase())}`, {
@@ -100,6 +115,8 @@ export default function Alerts() {
       const data = response.ok ? await response.json() : null;
       if (request !== priceRequest.current) return;
       const suggested = Number(data?.suggestedBreakout);
+      const close = Number(data?.currentPrice);
+      setLastClose(Number.isFinite(close) && close > 0 ? close : null);
       if (Number.isFinite(suggested) && suggested > 0) {
         setAlertForm((prev) => ({ ...prev, targetPrice: suggested.toFixed(2) }));
         setPriceNote(`Suggested from the last close (${price(data?.currentPrice)}). Adjust as needed.`);
@@ -118,9 +135,29 @@ export default function Alerts() {
     fetchPriceAndSetBreakout(value);
   };
 
+  const deleteButton = (alert: PriceAlert) => (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      className="h-7 px-2 text-xs text-muted-foreground hover:text-signal-down"
+      disabled={deleteAlertMutation.isPending}
+      onClick={() => {
+        if (window.confirm(`Delete the ${alert.symbol} price alert?`)) {
+          deleteAlertMutation.mutate(alert.id);
+        }
+      }}
+    >
+      Delete
+    </Button>
+  );
+
   return (
     <>
-      <PageHeader title="Alerts" description="Price levels you are watching for a breakout or breakdown." />
+      <PageHeader
+        title="Alerts"
+        description="Price levels you are watching. After each trading day we email you once if the day's high or low reached one."
+      />
 
       <div className="grid gap-x-16 lg:grid-cols-3">
         <div className="min-w-0 lg:col-span-2">
@@ -157,22 +194,7 @@ export default function Alerts() {
                         <td className="py-2.5 pl-6 text-muted-foreground">
                           {alert.createdAt ? new Date(alert.createdAt).toLocaleDateString() : '—'}
                         </td>
-                        <td className="py-2.5 text-right">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 px-2 text-xs text-muted-foreground hover:text-signal-down"
-                            disabled={deleteAlertMutation.isPending}
-                            onClick={() => {
-                              if (window.confirm(`Delete the ${alert.symbol} price alert?`)) {
-                                deleteAlertMutation.mutate(alert.id);
-                              }
-                            }}
-                          >
-                            Delete
-                          </Button>
-                        </td>
+                        <td className="py-2.5 text-right">{deleteButton(alert)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -180,6 +202,49 @@ export default function Alerts() {
               </div>
             )}
           </Section>
+
+          {firedAlerts.length > 0 && (
+            <Section title={`Recently fired · ${firedAlerts.length}`}>
+              <div className="relative overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left">
+                      <th className={th}>Symbol</th>
+                      <th className={th}>Type</th>
+                      <th className={cn(th, 'text-right')}>Target</th>
+                      <th className={cn(th, 'text-right')}>Hit</th>
+                      <th className={cn(th, 'pl-6')}>Day</th>
+                      <th className={th}>
+                        <span className="sr-only">Actions</span>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/60">
+                    {firedAlerts.map((alert) => (
+                      <tr key={alert.id}>
+                        <td className="py-2.5">
+                          <span className="inline-flex items-center gap-3">
+                            <AccentBar
+                              signal={alert.alertType === 'breakdown' ? 'down' : 'up'}
+                              orientation="vertical"
+                            />
+                            <span className="font-medium text-foreground">{alert.symbol}</span>
+                          </span>
+                        </td>
+                        <td className="py-2.5 capitalize text-muted-foreground">{alert.alertType}</td>
+                        <td className="py-2.5 text-right font-mono tabular-nums text-muted-foreground">
+                          {price(alert.targetPrice)}
+                        </td>
+                        <td className="py-2.5 text-right font-mono tabular-nums text-foreground">{price(alert.firedPrice)}</td>
+                        <td className="py-2.5 pl-6 text-muted-foreground">{tradingDay(alert.firedAt)}</td>
+                        <td className="py-2.5 text-right">{deleteButton(alert)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Section>
+          )}
         </div>
 
         <div className="min-w-0">
@@ -246,6 +311,13 @@ export default function Alerts() {
                   className="border-0 bg-muted font-mono"
                 />
                 {priceNote && <p className="text-xs text-muted-foreground">{priceNote}</p>}
+                {alreadyCrossed && lastClose !== null && (
+                  <p className="text-xs text-signal-warn" role="status">
+                    {alertForm.symbol} last closed at {lastClose.toFixed(2)}, already{' '}
+                    {alertForm.alertType === 'breakout' ? 'above' : 'below'} {targetNum.toFixed(2)}. This alert will fire
+                    after the next trading day.
+                  </p>
+                )}
               </div>
 
               {createAlertMutation.isError && (

@@ -88,6 +88,9 @@ export const priceAlerts = pgTable("price_alerts", {
   alertType: text("alert_type").notNull(),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow(),
+  // Set by the alert checker when the alert fires (migration 0003).
+  firedAt: timestamp("fired_at"),
+  firedPrice: decimal("fired_price", { precision: 10, scale: 2 }),
 });
 
 export const scanResults = pgTable("scan_results", {
@@ -142,6 +145,8 @@ export const insertTradeSchema = createInsertSchema(trades).omit({
 export const insertPriceAlertSchema = createInsertSchema(priceAlerts).omit({
   id: true,
   createdAt: true,
+  firedAt: true,
+  firedPrice: true,
 });
 
 export const insertScanResultSchema = createInsertSchema(scanResults).omit({

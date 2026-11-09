@@ -120,7 +120,7 @@ export default function Register() {
         <div className="flex items-center justify-between gap-4 py-1">
           <div>
             <Label htmlFor="email-alerts">Email alerts</Label>
-            <p className="text-xs text-muted-foreground">Email me when a trade hits its stop or target.</p>
+            <p className="text-xs text-muted-foreground">Email me when a price alert fires or a position hits its stop or target.</p>
           </div>
           <Switch
             id="email-alerts"

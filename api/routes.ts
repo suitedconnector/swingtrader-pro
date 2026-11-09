@@ -7,7 +7,7 @@ import { exec } from "child_process";
 import { storage } from "./storage";
 import { updateUserProfileSchema, registerUserSchema } from "@shared/schema";
 import { sendTestAlert, sendVerificationCode, sendEmailChangeVerificationCode } from "./emailService";
-import { getHistoricalAggregates } from "./massiveService";
+import { getDailyBars } from "./priceCache";
 import { runScansV2 } from "./scanner_pipeline";
 import { z } from "zod";
 
@@ -66,21 +66,11 @@ const safe = (fn: AsyncHandler) => (req: Request, res: Response, next: NextFunct
   fn(req, res, next).catch(next);
 };
 
-// Daily bars for roughly the last week and a half, so weekends and market
-// holidays still return the latest close. Returns null when the price
+// Daily bars for the last week and a half, from the shared cache that keeps
+// all lookups under the provider's rate limit. Returns null when the price
 // provider fails or has no bars.
-const PRICE_LOOKBACK_DAYS = 10;
-async function recentDailyBars(symbol: string, apiKey: string) {
-  const day = (d: Date) => d.toISOString().split("T")[0];
-  const end = new Date();
-  const start = new Date(end.getTime() - PRICE_LOOKBACK_DAYS * 86400000);
-  try {
-    const bars = await getHistoricalAggregates(symbol, apiKey, day(start), day(end));
-    return Array.isArray(bars) && bars.length > 0 ? bars : null;
-  } catch (err) {
-    console.error(`Price lookup failed for ${symbol}:`, err instanceof Error ? err.message : err);
-    return null;
-  }
+function recentDailyBars(symbol: string, _apiKey: string) {
+  return getDailyBars(symbol);
 }
 
 function quoteFromBars(bars: { close: number }[]) {
