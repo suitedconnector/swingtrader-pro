@@ -210,7 +210,7 @@ export function PreEntryPhase() {
               </div>
 
               <div className="space-y-2">
-                <Label>Alert when price</Label>
+                <Label className="block">Alert when price</Label>
                 <div className="inline-flex rounded-md bg-muted p-0.5" role="radiogroup" aria-label="Alert type">
                   {(['breakout', 'breakdown'] as AlertType[]).map((type) => (
                     <button
