@@ -9,6 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Watchlist } from '@/../../shared/schema';
 import type { PositionCalculation, AccountSettings } from '@/lib/types';
 import type { Trade, Stock } from '@shared/schema';
+import { Play } from 'lucide-react';
 
 export function EntryPhase() {
   const queryClient = useQueryClient();
@@ -202,7 +203,7 @@ export function EntryPhase() {
   return (
     <div className="bg-white dark:bg-dark-surface rounded-xl shadow-sm border border-gray-200 dark:border-dark-border p-6">
       <h3 className="text-lg font-semibold mb-4 flex items-center">
-        <i className="fas fa-play text-trading-primary mr-2"></i>
+        <Play className="inline-block shrink-0 h-4 w-4 text-trading-primary mr-2" aria-hidden="true" />
         Phase 4: Entry Execution & Position Sizing
       </h3>
 

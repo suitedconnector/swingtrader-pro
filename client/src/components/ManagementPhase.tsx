@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { apiRequest } from '@/lib/queryClient';
 import type { Trade } from '@shared/schema';
+import { ChartLine } from 'lucide-react';
 
 export function ManagementPhase() {
   const queryClient = useQueryClient();
@@ -86,7 +87,7 @@ export function ManagementPhase() {
   return (
     <div className="bg-white dark:bg-dark-surface rounded-xl shadow-sm border border-gray-200 dark:border-dark-border p-6">
       <h3 className="text-lg font-semibold mb-4 flex items-center">
-        <i className="fas fa-chart-line text-trading-primary mr-2"></i>
+        <ChartLine className="inline-block shrink-0 h-4 w-4 text-trading-primary mr-2" aria-hidden="true" />
         Phase 5: Active Trade Management
       </h3>
 
@@ -95,7 +96,7 @@ export function ManagementPhase() {
         
         {activeTrades.length === 0 ? (
           <div className="text-center py-8">
-            <i className="fas fa-chart-line text-4xl text-gray-400 mb-4"></i>
+            <ChartLine className="inline-block shrink-0 h-10 w-10 text-gray-400 mb-4" aria-hidden="true" />
             <p className="text-gray-600 dark:text-gray-400">No active positions</p>
             <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">
               Execute trades in Phase 4 to see them here for management

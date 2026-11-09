@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Progress } from '@/components/ui/progress';
 import { apiRequest } from '@/lib/queryClient';
 import type { ScanResult, Watchlist } from '@shared/schema';
+import { Check, Search, X } from 'lucide-react';
 
 export function ScanningPhase() {
   const queryClient = useQueryClient();
@@ -194,7 +195,7 @@ export function ScanningPhase() {
   return (
     <div className="bg-white dark:bg-dark-surface rounded-xl shadow-sm border border-gray-200 dark:border-dark-border p-6">
       <h3 className="text-lg font-semibold mb-4 flex items-center">
-        <i className="fas fa-search text-trading-primary mr-2"></i>
+        <Search className="inline-block shrink-0 h-4 w-4 text-trading-primary mr-2" aria-hidden="true" />
         Phase 1: Scanning & Initial Stock Identification
       </h3>
       
@@ -286,35 +287,35 @@ export function ScanningPhase() {
             <div className="space-y-1 text-xs text-gray-600 dark:text-gray-400">
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
-                  <i className="fas fa-check text-green-500 w-4"></i>
+                  <Check className="inline-block shrink-0 text-green-500 h-4 w-4" aria-hidden="true" />
                   <span>Price Movement</span>
                 </div>
                 <span className="text-green-600 font-medium">&gt; 5% gain</span>
               </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
-                  <i className="fas fa-check text-green-500 w-4"></i>
+                  <Check className="inline-block shrink-0 text-green-500 h-4 w-4" aria-hidden="true" />
                   <span>Volume</span>
                 </div>
                 <span className="text-green-600 font-medium">&gt; 500K shares</span>
               </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
-                  <i className="fas fa-check text-green-500 w-4"></i>
+                  <Check className="inline-block shrink-0 text-green-500 h-4 w-4" aria-hidden="true" />
                   <span>Dollar Volume</span>
                 </div>
                 <span className="text-green-600 font-medium">&gt; $5M</span>
               </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
-                  <i className="fas fa-check text-green-500 w-4"></i>
+                  <Check className="inline-block shrink-0 text-green-500 h-4 w-4" aria-hidden="true" />
                   <span>Price Level</span>
                 </div>
                 <span className="text-green-600 font-medium">&gt; $10.00</span>
               </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
-                  <i className="fas fa-times text-red-500 w-4"></i>
+                  <X className="inline-block shrink-0 text-red-500 h-4 w-4" aria-hidden="true" />
                   <span>Biotech Stocks</span>
                 </div>
                 <span className="text-red-600 font-medium">Excluded</span>
@@ -389,7 +390,7 @@ export function ScanningPhase() {
             </div>
           ) : filteredScanResults.length === 0 ? (
             <div className="text-center py-8">
-              <i className="fas fa-search text-4xl text-gray-400 mb-4"></i>
+              <Search className="inline-block shrink-0 h-10 w-10 text-gray-400 mb-4" aria-hidden="true" />
               <p className="text-gray-600 dark:text-gray-400">
                 {scanResults.length === 0 
                   ? "No scan results yet. Run scans to see potential trading candidates."

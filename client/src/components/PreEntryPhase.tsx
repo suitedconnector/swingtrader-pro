@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { apiRequest } from '@/lib/queryClient';
 import type { PriceAlert, Watchlist, ScanResult } from '@shared/schema';
+import { Bell } from 'lucide-react';
 
 export function PreEntryPhase() {
   const queryClient = useQueryClient();
@@ -122,7 +123,7 @@ export function PreEntryPhase() {
   return (
     <div className="bg-white dark:bg-dark-surface rounded-xl shadow-sm border border-gray-200 dark:border-dark-border p-6">
       <h3 className="text-lg font-semibold mb-4 flex items-center">
-        <i className="fas fa-bell text-trading-primary mr-2"></i>
+        <Bell className="inline-block shrink-0 h-4 w-4 text-trading-primary mr-2" aria-hidden="true" />
         Phase 3: Pre-Entry Preparation
       </h3>
 

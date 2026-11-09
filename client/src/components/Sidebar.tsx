@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'wouter';
 import type { MarketData } from '@/lib/types';
 import type { Watchlist, PriceAlert, Trade } from '@shared/schema';
+import { Bell, ChartArea, ChartPie, CircleCheck, List, Mail, User } from 'lucide-react';
 
 export function Sidebar() {
   const { data: marketData } = useQuery<MarketData>({
@@ -56,7 +57,7 @@ export function Sidebar() {
       {/* Market Status */}
       <div className="bg-white dark:bg-dark-surface rounded-xl shadow-sm border border-gray-200 dark:border-dark-border p-4">
         <h3 className="text-lg font-semibold mb-3 flex items-center">
-          <i className="fas fa-chart-area text-trading-primary mr-2"></i>
+          <ChartArea className="inline-block shrink-0 h-4 w-4 text-trading-primary mr-2" aria-hidden="true" />
           Market Status
         </h3>
         <div className="space-y-3">
@@ -81,7 +82,7 @@ export function Sidebar() {
          </div>
         <div className="mt-3 p-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
           <div className="flex items-center text-sm text-trading-success">
-            <i className="fas fa-check-circle mr-2"></i>
+            <CircleCheck className="inline-block shrink-0 h-4 w-4 mr-2" aria-hidden="true" />
             Market trend: {marketData?.trend || 'Loading...'}
           </div>
         </div>
@@ -91,7 +92,7 @@ export function Sidebar() {
       <div className="bg-white dark:bg-dark-surface rounded-xl shadow-sm border border-gray-200 dark:border-dark-border p-4">
         <h3 className="text-lg font-semibold mb-3 flex items-center justify-between">
           <div className="flex items-center">
-            <i className="fas fa-list text-trading-primary mr-2"></i>
+            <List className="inline-block shrink-0 h-4 w-4 text-trading-primary mr-2" aria-hidden="true" />
             Watchlists
           </div>
         </h3>
@@ -134,7 +135,7 @@ export function Sidebar() {
       {/* Quick Stats */}
       <div className="bg-white dark:bg-dark-surface rounded-xl shadow-sm border border-gray-200 dark:border-dark-border p-4">
         <h3 className="text-lg font-semibold mb-3 flex items-center">
-          <i className="fas fa-chart-pie text-trading-primary mr-2"></i>
+          <ChartPie className="inline-block shrink-0 h-4 w-4 text-trading-primary mr-2" aria-hidden="true" />
           Today's Stats
         </h3>
         <div className="space-y-3">
@@ -164,7 +165,7 @@ export function Sidebar() {
       {/* Price Alerts */}
       <div className="bg-white dark:bg-dark-surface rounded-xl shadow-sm border border-gray-200 dark:border-dark-border p-4">
         <h3 className="text-lg font-semibold mb-3 flex items-center">
-          <i className="fas fa-bell text-trading-warning mr-2"></i>
+          <Bell className="inline-block shrink-0 h-4 w-4 text-trading-warning mr-2" aria-hidden="true" />
           Price Alerts
         </h3>
         {priceAlerts.length === 0 ? (
@@ -191,12 +192,12 @@ export function Sidebar() {
       {/* User Profile */}
       <div className="bg-white dark:bg-dark-surface rounded-xl shadow-sm border border-gray-200 dark:border-dark-border p-4">
         <h3 className="text-lg font-semibold mb-3 flex items-center">
-          <i className="fas fa-user text-trading-primary mr-2"></i>
+          <User className="inline-block shrink-0 h-4 w-4 text-trading-primary mr-2" aria-hidden="true" />
           Profile
         </h3>
         <div className="space-y-2">
           <button className="w-full text-left text-sm p-2 rounded hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-            <i className="fas fa-envelope mr-2 text-gray-500"></i>
+            <Mail className="inline-block shrink-0 h-4 w-4 mr-2 text-gray-500" aria-hidden="true" />
             Email & SMS Settings
           </button>
           <div className="text-xs text-gray-500 dark:text-gray-400 px-2">

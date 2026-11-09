@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { useMutation } from '@tanstack/react-query';
+import { ChartLine, Moon, Sun, User } from 'lucide-react';
 
 export function Navbar() {
   const { theme, toggleTheme } = useThemeContext();
@@ -43,7 +44,7 @@ export function Navbar() {
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-2">
-              <i className="fas fa-chart-line text-trading-primary text-xl"></i>
+              <ChartLine className="inline-block shrink-0 text-trading-primary h-5 w-5" aria-hidden="true" />
               <h1 className="text-xl font-bold text-gray-900 dark:text-white">SwingTrader Pro</h1>
             </div>
             <div className="hidden md:flex items-center space-x-1">
@@ -70,7 +71,7 @@ export function Navbar() {
             </button>
             <Link href="/profile">
               <button className="px-4 py-2 text-sm font-medium text-trading-primary hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors">
-                <i className="fas fa-user mr-2"></i>
+                <User className="inline-block shrink-0 h-4 w-4 mr-2" aria-hidden="true" />
                 Account
               </button>
             </Link>
@@ -86,9 +87,9 @@ export function Navbar() {
               className="p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
             >
               {theme === 'light' ? (
-                <i className="fas fa-moon"></i>
+                <Moon className="inline-block shrink-0 h-4 w-4" aria-hidden="true" />
               ) : (
-                <i className="fas fa-sun"></i>
+                <Sun className="inline-block shrink-0 h-4 w-4" aria-hidden="true" />
               )}
             </button>
           </div>

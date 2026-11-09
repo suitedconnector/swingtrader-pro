@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
-import { UserPlus, Mail, Lock, User } from 'lucide-react';
+import { DollarSign, Lock, Mail, User, UserPlus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import { useLocation } from 'wouter';
@@ -152,7 +152,7 @@ export default function Register() {
 
               <div className="space-y-2">
                 <Label htmlFor="tradingBankroll" className="flex items-center gap-2">
-                  <i className="fas fa-dollar-sign h-4 w-4"></i>
+                  <DollarSign className="inline-block shrink-0 h-4 w-4" aria-hidden="true" />
                   Trading Bankroll
                 </Label>
                 <Input

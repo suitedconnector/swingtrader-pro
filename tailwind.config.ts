@@ -41,6 +41,12 @@ export default {
           DEFAULT: "hsl(var(--destructive))",
           foreground: "hsl(var(--destructive-foreground))",
         },
+        signal: {
+          up: "hsl(var(--signal-up))",
+          down: "hsl(var(--signal-down))",
+          info: "hsl(var(--signal-info))",
+          warn: "hsl(var(--signal-warn))",
+        },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",

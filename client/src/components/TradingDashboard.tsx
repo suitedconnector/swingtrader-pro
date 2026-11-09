@@ -9,14 +9,15 @@ import { ManagementPhase } from './ManagementPhase';
 import { AnalysisPhase } from './AnalysisPhase';
 import { Sidebar } from './Sidebar';
 import type { TradingPhase } from '@/lib/types';
+import { Activity, Bell, ChartColumn, ChartLine, Play, Search } from 'lucide-react';
 
 const TRADING_PHASES: TradingPhase[] = [
-  { id: 1, name: 'Scanning', description: 'Scanning & ID', icon: 'fas fa-search', isActive: true },
-  { id: 2, name: 'Chart Setup', description: 'Chart Setup', icon: 'fas fa-chart-bar', isActive: false },
-  { id: 3, name: 'Pre-Entry', description: 'Pre-Entry', icon: 'fas fa-bell', isActive: false },
-  { id: 4, name: 'Entry', description: 'Entry', icon: 'fas fa-play', isActive: false },
-  { id: 5, name: 'Management', description: 'Management', icon: 'fas fa-chart-line', isActive: false },
-  { id: 6, name: 'Analysis', description: 'Analysis', icon: 'fas fa-analytics', isActive: false },
+  { id: 1, name: 'Scanning', description: 'Scanning & ID', icon: Search, isActive: true },
+  { id: 2, name: 'Chart Setup', description: 'Chart Setup', icon: ChartColumn, isActive: false },
+  { id: 3, name: 'Pre-Entry', description: 'Pre-Entry', icon: Bell, isActive: false },
+  { id: 4, name: 'Entry', description: 'Entry', icon: Play, isActive: false },
+  { id: 5, name: 'Management', description: 'Management', icon: ChartLine, isActive: false },
+  { id: 6, name: 'Analysis', description: 'Analysis', icon: Activity, isActive: false },
 ];
 
 export function TradingDashboard() {

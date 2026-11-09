@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import type { Trade } from '@shared/schema';
+import { Activity } from 'lucide-react';
 
 export function AnalysisPhase() {
   const { data: allTrades = [], isLoading } = useQuery<Trade[]>({
@@ -37,7 +38,7 @@ export function AnalysisPhase() {
   return (
     <div className="bg-white dark:bg-dark-surface rounded-xl shadow-sm border border-gray-200 dark:border-dark-border p-6">
       <h3 className="text-lg font-semibold mb-4 flex items-center">
-        <i className="fas fa-analytics text-trading-primary mr-2"></i>
+        <Activity className="inline-block shrink-0 h-4 w-4 text-trading-primary mr-2" aria-hidden="true" />
         Phase 6: Post-Trading Analysis
       </h3>
 

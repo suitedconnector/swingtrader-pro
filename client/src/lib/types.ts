@@ -1,8 +1,10 @@
+import type { LucideIcon } from 'lucide-react';
+
 export interface TradingPhase {
   id: number;
   name: string;
   description: string;
-  icon: string;
+  icon: LucideIcon;
   isActive: boolean;
 }
 
