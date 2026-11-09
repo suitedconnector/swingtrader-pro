@@ -1,15 +1,39 @@
 import { storage } from './storage';
 import { sendPriceAlertEmail } from './emailService';
-import { getMarketQuote } from './massiveService';
+import { getHistoricalAggregates } from './massiveService';
 
 // Check active trades every 30 seconds; the next cycle is scheduled only
 // after the current one finishes, so cycles never overlap.
 const MONITOR_INTERVAL_MS = 30_000;
 
-// Fetch each unique symbol once. Symbols without a valid price are left out,
-// so their trades are skipped for this cycle instead of being closed.
-async function getCurrentPrices(symbols: string[]): Promise<Map<string, number>> {
-  const prices = new Map<string, number>();
+// How far back to look for the latest completed daily bar. Ten calendar days
+// covers weekends and market holidays.
+const LOOKBACK_DAYS = 10;
+
+const MARKET_TIME_ZONE = 'America/New_York';
+
+interface DailyClose {
+  price: number;
+  barDate: string; // YYYY-MM-DD trading day of the bar, in New York time
+}
+
+// YYYY-MM-DD for the given instant, in New York (exchange) time.
+function marketDate(date: Date): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: MARKET_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
+}
+
+// Fetch each unique symbol once and use the close of the most recent
+// COMPLETED daily bar: any bar dated today (New York time) is ignored, even
+// after the close, so an unfinished bar is never used. Symbols without a
+// valid price are left out, so their trades are skipped for this cycle
+// instead of being closed.
+async function getCurrentPrices(symbols: string[]): Promise<Map<string, DailyClose>> {
+  const prices = new Map<string, DailyClose>();
   const apiKey = process.env.MASSIVE_API_KEY;
 
   if (!apiKey) {
@@ -17,17 +41,32 @@ async function getCurrentPrices(symbols: string[]): Promise<Map<string, number>>
     return prices;
   }
 
+  const now = new Date();
+  const today = marketDate(now);
+  const start = marketDate(new Date(now.getTime() - LOOKBACK_DAYS * 24 * 60 * 60 * 1000));
+
   for (const symbol of Array.from(new Set(symbols))) {
     try {
-      const quote = await getMarketQuote(symbol, apiKey);
-      const price = Number(quote.price);
+      const bars = await getHistoricalAggregates(symbol, apiKey, start, today);
 
-      if (!Number.isFinite(price) || price <= 0) {
-        console.error(`Trade monitor: invalid price for ${symbol}; skipping this quote.`);
+      const completed = bars
+        .map((bar: { date: string; close: number }) => ({
+          barDate: marketDate(new Date(bar.date)),
+          price: Number(bar.close),
+        }))
+        .filter((bar: DailyClose) => bar.barDate < today);
+
+      const latest = completed[completed.length - 1];
+
+      if (!latest || !Number.isFinite(latest.price) || latest.price <= 0) {
+        console.error(`Trade monitor: no valid completed daily bar for ${symbol}; skipping this quote.`);
         continue;
       }
 
-      prices.set(symbol, price);
+      console.log(
+        `Trade monitor: ${symbol} close $${latest.price.toFixed(2)} from completed daily bar ${latest.barDate}`
+      );
+      prices.set(symbol, latest);
     } catch (error) {
       console.error(`Trade monitor: could not get a price for ${symbol}; skipping this quote:`, error);
     }
@@ -46,8 +85,9 @@ export async function monitorActiveTrades(): Promise<void> {
 
   for (const trade of activeTrades) {
     try {
-      const currentPrice = currentPrices.get(trade.symbol);
-      if (currentPrice === undefined) continue;
+      const quote = currentPrices.get(trade.symbol);
+      if (quote === undefined) continue;
+      const currentPrice = quote.price;
 
       const entryPrice = Number(trade.entryPrice);
       const stopLoss = Number(trade.stopLoss);
@@ -96,7 +136,7 @@ export async function monitorActiveTrades(): Promise<void> {
       }
 
       console.log(
-        `Trade monitor: closed ${trade.symbol} (trade ${trade.id}) ${exitReason} at $${exitPrice.toFixed(2)}, P&L: $${pnl.toFixed(2)}`
+        `Trade monitor: closed ${trade.symbol} (trade ${trade.id}) ${exitReason} at $${exitPrice.toFixed(2)}, P&L: $${pnl.toFixed(2)} (daily close $${currentPrice.toFixed(2)} from ${quote.barDate})`
       );
 
       // Notify the trade owner only if they have an email and alerts are on.
