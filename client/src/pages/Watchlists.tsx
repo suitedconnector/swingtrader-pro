@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { apiRequest } from '@/lib/queryClient';
 import type { PriceAlert, Watchlist } from '@shared/schema';
 import TradingViewChart from '@/components/TradingViewChart';
+import { YahooQuoteLink } from '@/components/YahooQuoteLink';
 import { useThemeContext } from '@/components/ThemeProvider';
 import { AccentBar, EmptyState, PageHeader, Section } from '@/components/layout/primitives';
 import { cn } from '@/lib/utils';
@@ -124,11 +125,12 @@ export default function Watchlists() {
               <span className="flex-1" />
               <span className={cn(numCol, 'font-sans')}>Close</span>
               <span className={cn(numCol, 'font-sans')}>Breakout</span>
+              <span className="w-7 shrink-0" />
               {type === 'flagged' && (
                 // Invisible copy of the row's Focus button, so the column labels line up.
                 <Button size="sm" variant="ghost" className="invisible h-7 px-2 text-xs" tabIndex={-1}>
                   <ArrowUp />
-                  Focus
+                  <span className="hidden sm:inline">Focus</span>
                 </Button>
               )}
               {list && <span className="w-7 shrink-0" />}
@@ -165,6 +167,7 @@ export default function Watchlists() {
                     <span className={cn(numCol, 'text-muted-foreground')}>{close}</span>
                     <span className={cn(numCol, 'text-foreground')}>{breakout}</span>
                   </button>
+                  <YahooQuoteLink symbol={symbol} />
                   {type === 'flagged' && (
                     <Button
                       size="sm"
@@ -173,9 +176,10 @@ export default function Watchlists() {
                       onClick={() => promoteMutation.mutate(symbol)}
                       disabled={busy}
                       title={`Move ${symbol} to the focus list`}
+                      aria-label={`Move ${symbol} to the focus list`}
                     >
                       <ArrowUp aria-hidden="true" />
-                      Focus
+                      <span className="hidden sm:inline">Focus</span>
                     </Button>
                   )}
                   {list && (
