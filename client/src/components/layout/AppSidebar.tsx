@@ -29,6 +29,7 @@ import {
 import { useAuth } from '@/hooks/use-auth';
 import { useLogout } from '@/hooks/use-logout';
 import { useThemeContext } from '@/components/ThemeProvider';
+import { useSettingsDrawer } from '@/hooks/use-settings-drawer';
 import { cn } from '@/lib/utils';
 
 interface NavItem {
@@ -64,6 +65,7 @@ export function AppSidebar() {
   const { user } = useAuth();
   const { logout, isLoggingOut } = useLogout();
   const { theme, toggleTheme } = useThemeContext();
+  const settings = useSettingsDrawer();
 
   const { data: profile } = useQuery<{ tradingBankroll?: string }>({
     queryKey: ['/api/profile'],
@@ -121,15 +123,15 @@ export function AppSidebar() {
         <SidebarMenu className="gap-0.5">
           <SidebarMenuItem>
             <SidebarMenuButton
-              asChild
-              isActive={isActive(location, '/profile')}
+              onClick={settings.open}
+              isActive={settings.isOpen}
+              aria-haspopup="dialog"
+              aria-expanded={settings.isOpen}
               tooltip="Settings"
               className={navButtonClass}
             >
-              <Link href="/profile">
-                <Settings aria-hidden="true" />
-                <span>Settings</span>
-              </Link>
+              <Settings aria-hidden="true" />
+              <span>Settings</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>

@@ -1,15 +1,13 @@
-import { UserProfile } from '@/components/UserProfile';
-import { PageHeader } from '@/components/layout/primitives';
+import { useEffect } from 'react';
+import { useLocation } from 'wouter';
 
-// Rendered inside the app shell. Becomes a settings drawer in redesign step 3.
+// Old /profile links now open the settings drawer over the Overview page.
 export default function Profile() {
-  return (
-    <div className="max-w-3xl">
-      <PageHeader
-        title="Settings"
-        description="Account, contact email, bankroll and notification preferences."
-      />
-      <UserProfile />
-    </div>
-  );
+  const [, navigate] = useLocation();
+
+  useEffect(() => {
+    navigate('/?settings=open', { replace: true });
+  }, [navigate]);
+
+  return null;
 }

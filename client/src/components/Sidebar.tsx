@@ -3,8 +3,10 @@ import { Link } from 'wouter';
 import type { MarketData } from '@/lib/types';
 import type { Watchlist, PriceAlert, Trade } from '@shared/schema';
 import { Bell, ChartArea, ChartPie, CircleCheck, List, Mail, User } from 'lucide-react';
+import { useSettingsDrawer } from '@/hooks/use-settings-drawer';
 
 export function Sidebar() {
+  const settings = useSettingsDrawer();
   const { data: marketData } = useQuery<MarketData>({
     queryKey: ['/api/market-data'],
   });
@@ -196,9 +198,13 @@ export function Sidebar() {
           Profile
         </h3>
         <div className="space-y-2">
-          <button className="w-full text-left text-sm p-2 rounded hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+          <button
+            type="button"
+            onClick={settings.open}
+            className="w-full text-left text-sm p-2 rounded hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+          >
             <Mail className="inline-block shrink-0 h-4 w-4 mr-2 text-gray-500" aria-hidden="true" />
-            Email & SMS Settings
+            Alert &amp; email settings
           </button>
           <div className="text-xs text-gray-500 dark:text-gray-400 px-2">
             Configure alerts for price breakouts

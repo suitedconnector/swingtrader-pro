@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { AppSidebar } from './AppSidebar';
+import { SettingsDrawer } from './SettingsDrawer';
 
 /**
  * Signed-in application frame: persistent left sidebar plus the page area.
@@ -17,6 +18,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
         <div className="mx-auto w-full max-w-6xl flex-1 px-6 pb-16 pt-2 lg:px-10">{children}</div>
       </SidebarInset>
+      <SettingsDrawer />
     </SidebarProvider>
   );
 }
