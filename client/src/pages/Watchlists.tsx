@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowUp, X } from 'lucide-react';
+import { ArrowUp, ChevronDown, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { apiRequest } from '@/lib/queryClient';
@@ -29,11 +29,35 @@ const fmt = (v: string | number | null | undefined) => {
 
 const numCol = 'w-16 shrink-0 text-right font-mono tabular-nums';
 
+// Which lists are collapsed, remembered in this browser only.
+const COLLAPSED_KEY = 'watchlists.collapsed';
+function loadCollapsed(): Record<string, boolean> {
+  try {
+    const raw = window.localStorage.getItem(COLLAPSED_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
 export default function Watchlists() {
   const queryClient = useQueryClient();
   const { theme } = useThemeContext();
   const [selected, setSelected] = useState<string | null>(null);
   const [newSymbol, setNewSymbol] = useState('');
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>(loadCollapsed);
+
+  const toggleList = (key: string) =>
+    setCollapsed((prev) => {
+      const next = { ...prev, [key]: !prev[key] };
+      try {
+        window.localStorage.setItem(COLLAPSED_KEY, JSON.stringify(next));
+      } catch {
+        // Storage unavailable (private window); the toggle still works for this visit.
+      }
+      return next;
+    });
 
   const { data: watchlists = [], isLoading } = useQuery<Watchlist[]>({ queryKey: ['/api/watchlists'] });
 
@@ -113,8 +137,35 @@ export default function Watchlists() {
 
   const renderList = (list: Watchlist | undefined, title: string, type?: ListType) => {
     const symbols = list?.symbols ?? [];
+    const key = type ?? `list-${list?.id}`;
+    const isCollapsed = !!collapsed[key];
+    const bodyId = `watchlist-${key}`;
     return (
-      <Section title={`${title} · ${symbols.length}`}>
+      <Section>
+        <button
+          type="button"
+          onClick={() => toggleList(key)}
+          aria-expanded={!isCollapsed}
+          aria-controls={bodyId}
+          className={cn(
+            'flex w-full min-w-0 items-center gap-2 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground',
+            !isCollapsed && 'mb-4'
+          )}
+        >
+          <ChevronDown
+            aria-hidden="true"
+            className={cn('h-3.5 w-3.5 shrink-0 transition-transform', isCollapsed && '-rotate-90')}
+          />
+          <span className="shrink-0">
+            {title} · {symbols.length}
+          </span>
+          {isCollapsed && symbols.length > 0 && (
+            <span className="min-w-0 truncate font-mono normal-case tracking-normal text-muted-foreground/70">
+              {symbols.join('  ')}
+            </span>
+          )}
+        </button>
+        <div id={bodyId} hidden={isCollapsed}>
         {symbols.length === 0 ? (
           <p className="py-2 text-sm text-muted-foreground">
             {type === 'focus' ? 'Stocks you plan to trade soon.' : type === 'flagged' ? 'Stocks to keep an eye on.' : 'Empty.'}
@@ -199,6 +250,7 @@ export default function Watchlists() {
             })}
           </ul>
         )}
+        </div>
       </Section>
     );
   };
