@@ -77,9 +77,9 @@ function TradingViewChart({
         ref={container}
         style={{ height: "calc(100% - 32px)", width: "100%" }}
       />
-      <div className="tradingview-widget-copyright">
-        <a href="https://www.tradingview.com/" rel="noopener nofollow" target="_blank">
-          <span className="blue-text">Track all markets on TradingView</span>
+      <div className="tradingview-widget-copyright pt-2 text-xs text-muted-foreground">
+        <a href="https://www.tradingview.com/" rel="noopener nofollow" target="_blank" className="hover:text-foreground">
+          Chart by TradingView
         </a>
       </div>
     </div>
