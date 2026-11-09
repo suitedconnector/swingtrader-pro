@@ -1,4 +1,4 @@
-import { Express, Request, Response } from "express";
+import { Express, Request, Response, NextFunction } from "express";
 import passport from "passport";
 import crypto from "crypto";
 import { hashPassword } from "./auth";
@@ -56,6 +56,41 @@ function checkRateLimit(key: string, limit: number = 5, windowMs: number = 60000
   current.count++;
   rateLimits.set(key, current);
   return true;
+}
+
+// Express 4 does not catch a rejected promise from an async handler, and an
+// unhandled rejection stops the Node process. Send those errors to next()
+// so Express answers 500 and the server keeps running.
+type AsyncHandler = (req: Request, res: Response, next: NextFunction) => Promise<unknown>;
+const safe = (fn: AsyncHandler) => (req: Request, res: Response, next: NextFunction) => {
+  fn(req, res, next).catch(next);
+};
+
+// Daily bars for roughly the last week and a half, so weekends and market
+// holidays still return the latest close. Returns null when the price
+// provider fails or has no bars.
+const PRICE_LOOKBACK_DAYS = 10;
+async function recentDailyBars(symbol: string, apiKey: string) {
+  const day = (d: Date) => d.toISOString().split("T")[0];
+  const end = new Date();
+  const start = new Date(end.getTime() - PRICE_LOOKBACK_DAYS * 86400000);
+  try {
+    const bars = await getHistoricalAggregates(symbol, apiKey, day(start), day(end));
+    return Array.isArray(bars) && bars.length > 0 ? bars : null;
+  } catch (err) {
+    console.error(`Price lookup failed for ${symbol}:`, err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
+function quoteFromBars(bars: { close: number }[]) {
+  const last = bars[bars.length - 1];
+  const prev = bars.length > 1 ? bars[bars.length - 2] : null;
+  const pct = prev && prev.close ? ((last.close - prev.close) / prev.close) * 100 : null;
+  return {
+    price: last.close.toFixed(2),
+    ...(pct === null ? {} : { change: `${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%` }),
+  };
 }
 
 export async function registerRoutes(app: Express) {
@@ -126,10 +161,11 @@ export async function registerRoutes(app: Express) {
     })(req, res, next);
   });
 
-  app.post("/api/request-login-code", async (req, res) => {
+  app.post("/api/request-login-code", safe(async (req, res) => {
     if (!process.env.AUTH_CODE_SECRET) return res.status(500).json({ message: "Auth configuration error" });
     const ip = req.ip || "unknown";
-    const { email } = req.body;
+    const { email } = req.body ?? {};
+    if (typeof email !== "string" || !email.trim()) return res.status(400).json({ message: "Email is required" });
     if (!checkRateLimit(`req_ip:${ip}`, 3) || !checkRateLimit(`req_email:${email}`, 3)) return res.status(429).json({ message: "Too many requests" });
     
     const user = await storage.getUserByEmail(email);
@@ -142,14 +178,17 @@ export async function registerRoutes(app: Express) {
     await storage.saveAuthCode(user.email!, digest);
     await sendVerificationCode(user.email!, rawCode);
     res.status(200).json({ message: "If an account exists, a code has been sent." });
-  });
+  }));
 
-  app.post("/api/verify-login-code", async (req, res, next) => {
+  app.post("/api/verify-login-code", safe(async (req, res, next) => {
     if (!process.env.AUTH_CODE_SECRET) return res.status(500).json({ message: "Auth configuration error" });
     const ip = req.ip || "unknown";
-    const { email, code } = req.body;
+    const { email, code } = req.body ?? {};
     if (!checkRateLimit(`ver_ip:${ip}`, 5) || !checkRateLimit(`ver_email:${email}`, 5)) return res.status(429).json({ message: "Too many attempts" });
-    
+    if (typeof email !== "string" || typeof code !== "string" || !email.trim() || !code.trim()) {
+      return res.status(400).json({ message: "Email and code are required" });
+    }
+
     const digest = crypto.createHmac('sha256', process.env.AUTH_CODE_SECRET).update(code).digest('hex');
     const isValid = await storage.verifyAuthCode(email, digest);
     if (!isValid) return res.status(401).json({ message: "Invalid or expired code" });
@@ -163,7 +202,7 @@ export async function registerRoutes(app: Express) {
       const { password, ...userProfile } = user;
       res.json({ message: "Logged in successfully", user: userProfile });
     });
-  });
+  }));
 
   // ... (Other routes remain the same)
   app.get("/api/user", (req, res) => {
@@ -341,11 +380,11 @@ export async function registerRoutes(app: Express) {
   });
 
   app.get("/api/watchlists", (req, res, next) => { if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" }); storage.getWatchlists(req.user.id).then(d => res.json(d)).catch(next); });
-  app.post("/api/watchlists", async (req, res) => { if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" }); const w = await storage.createWatchlist({ ...req.body, userId: req.user.id }); res.status(201).json(w); });
-  app.patch("/api/watchlists/:id", async (req, res) => { if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" }); const w = await storage.updateWatchlist(parseInt(req.params.id), req.user.id, req.body); if (!w) return res.status(404).json({ message: "Not found" }); res.json(w); });
-  app.delete("/api/watchlists/:id", async (req, res) => { if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" }); const deleted = await storage.deleteWatchlist(parseInt(req.params.id), req.user.id); if (!deleted) return res.status(404).json({ message: "Not found" }); res.status(204).send(); });
+  app.post("/api/watchlists", safe(async (req, res) => { if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" }); const w = await storage.createWatchlist({ ...req.body, userId: req.user.id }); res.status(201).json(w); }));
+  app.patch("/api/watchlists/:id", safe(async (req, res) => { if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" }); const w = await storage.updateWatchlist(parseInt(req.params.id), req.user.id, req.body); if (!w) return res.status(404).json({ message: "Not found" }); res.json(w); }));
+  app.delete("/api/watchlists/:id", safe(async (req, res) => { if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" }); const deleted = await storage.deleteWatchlist(parseInt(req.params.id), req.user.id); if (!deleted) return res.status(404).json({ message: "Not found" }); res.status(204).send(); }));
   app.get("/api/trades", (req, res, next) => { if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" }); storage.getTrades(req.user.id).then(d => res.json(d)).catch(next); });
-  app.post("/api/trades", async (req, res) => { if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" }); const t = await storage.createTrade({ ...req.body, userId: req.user.id }); res.status(201).json(t); });
+  app.post("/api/trades", safe(async (req, res) => { if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" }); const t = await storage.createTrade({ ...req.body, userId: req.user.id }); res.status(201).json(t); }));
   app.patch("/api/trades/:id", async (req, res, next) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" });
     const id = Number(req.params.id);
@@ -363,15 +402,34 @@ export async function registerRoutes(app: Express) {
     }
   });
   app.get("/api/price-alerts", (req, res, next) => { if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" }); storage.getPriceAlerts(req.user.id).then(d => res.json(d)).catch(next); });
-  app.post("/api/price-alerts", async (req, res) => { if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" }); const a = await storage.createPriceAlert({ ...req.body, userId: req.user.id }); res.status(201).json(a); });
-  app.patch("/api/price-alerts/:id", async (req, res) => { if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" }); const a = await storage.updatePriceAlert(parseInt(req.params.id), req.user.id, req.body); if (!a) return res.status(404).json({ message: "Not found" }); res.json(a); });
-  app.delete("/api/price-alerts/:id", async (req, res) => { if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" }); const d = await storage.deletePriceAlert(Number(req.params.id), req.user.id); if (!d) return res.status(404).json({ message: "Not found" }); res.status(204).send(); });
-  app.get("/api/stock-price/:symbol", async (req, res) => { const s = req.params.symbol.toUpperCase(); if (!/^[A-Z][A-Z0-9.-]{0,9}$/.test(s)) return res.status(400).json({ message: "Invalid symbol" }); const apiKey = process.env.MASSIVE_API_KEY; if (!apiKey) return res.status(500).json({ message: "API key not configured" }); const yesterday = new Date(Date.now() - 172800000).toISOString().split('T')[0]; const today = new Date().toISOString().split('T')[0]; const stockData = await getHistoricalAggregates(s, apiKey, yesterday, today); if (!stockData || stockData.length === 0) return res.status(404).json({ message: "Not found" }); const latest = stockData[stockData.length - 1]; const suggested = Math.max(latest.high * 1.02, latest.close * 1.03); res.json({ symbol: s, currentPrice: latest.close.toFixed(2), suggestedBreakout: suggested.toFixed(2) }); });
-  app.get("/api/market-data", async (req, res) => { const apiKey = process.env.MASSIVE_API_KEY; if (!apiKey) return res.status(500).json({ message: "API key not configured" }); const spy = await getHistoricalAggregates("SPY", apiKey, new Date(Date.now() - 172800000).toISOString().split('T')[0], new Date().toISOString().split('T')[0]).catch(() => null); const nasdaq = await getHistoricalAggregates("QQQ", apiKey, new Date(Date.now() - 172800000).toISOString().split('T')[0], new Date().toISOString().split('T')[0]).catch(() => null); if (!spy || !nasdaq) return res.status(503).json({ message: "Data unavailable" }); res.json({ spy: { price: spy[spy.length-1].close.toFixed(2) }, nasdaq: { price: nasdaq[nasdaq.length-1].close.toFixed(2) } }); });
-  app.post("/api/run-scans", (req, res, next) => { if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" }); next(); }, async (req, res) => { await storage.clearOldScanResults(); exec('.venv/bin/python api/simple_scan.py', (err, stdout) => { try { const data = JSON.parse(stdout); data.forEach(async (s: any) => await storage.createScanResult({ symbol: s.symbol, scanType: '1day', price: s.price.toFixed(2), change: "0", changePercent: s.change_percent.toFixed(2), volume: s.volume, sector: s.sector, dollarVolume: (s.price * s.volume).toString() })); res.json({ count: data.length }); } catch { res.status(500).json({ message: "Scan failed" }); } }); });
+  app.post("/api/price-alerts", safe(async (req, res) => { if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" }); const a = await storage.createPriceAlert({ ...req.body, userId: req.user.id }); res.status(201).json(a); }));
+  app.patch("/api/price-alerts/:id", safe(async (req, res) => { if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" }); const a = await storage.updatePriceAlert(parseInt(req.params.id), req.user.id, req.body); if (!a) return res.status(404).json({ message: "Not found" }); res.json(a); }));
+  app.delete("/api/price-alerts/:id", safe(async (req, res) => { if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" }); const d = await storage.deletePriceAlert(Number(req.params.id), req.user.id); if (!d) return res.status(404).json({ message: "Not found" }); res.status(204).send(); }));
+
+  app.get("/api/stock-price/:symbol", safe(async (req, res) => {
+    const s = req.params.symbol.toUpperCase();
+    if (!/^[A-Z][A-Z0-9.-]{0,9}$/.test(s)) return res.status(400).json({ message: "Invalid symbol" });
+    const apiKey = process.env.MASSIVE_API_KEY;
+    if (!apiKey) return res.status(500).json({ message: "API key not configured" });
+    const bars = await recentDailyBars(s, apiKey);
+    if (!bars) return res.status(404).json({ message: "No recent price for this symbol" });
+    const latest = bars[bars.length - 1];
+    const suggested = Math.max(latest.high * 1.02, latest.close * 1.03);
+    res.json({ symbol: s, currentPrice: latest.close.toFixed(2), suggestedBreakout: suggested.toFixed(2) });
+  }));
+
+  app.get("/api/market-data", safe(async (req, res) => {
+    const apiKey = process.env.MASSIVE_API_KEY;
+    if (!apiKey) return res.status(500).json({ message: "API key not configured" });
+    const [spy, nasdaq] = await Promise.all([recentDailyBars("SPY", apiKey), recentDailyBars("QQQ", apiKey)]);
+    if (!spy || !nasdaq) return res.status(503).json({ message: "Data unavailable" });
+    res.json({ spy: quoteFromBars(spy), nasdaq: quoteFromBars(nasdaq) });
+  }));
+
+  app.post("/api/run-scans", (req, res, next) => { if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" }); next(); }, safe(async (req, res) => { await storage.clearOldScanResults(); exec('.venv/bin/python api/simple_scan.py', (err, stdout) => { let data: any[]; try { data = JSON.parse(stdout); } catch { return res.status(500).json({ message: "Scan failed" }); } Promise.all(data.map((s: any) => storage.createScanResult({ symbol: s.symbol, scanType: '1day', price: s.price.toFixed(2), change: "0", changePercent: s.change_percent.toFixed(2), volume: s.volume, sector: s.sector, dollarVolume: (s.price * s.volume).toString() }))).then(() => res.json({ count: data.length })).catch((e) => { console.error("Saving scan results failed:", e instanceof Error ? e.message : e); res.status(500).json({ message: "Scan failed" }); }); }); }));
   app.post("/api/run-scans-v2", (req, res, next) => { if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" }); next(); }, runScansV2);
-  app.get("/api/scan-results", async (req, res) => { const r = await storage.getScanResults(); res.json(r); });
-  app.delete("/api/scan-results", async (req, res) => { await storage.clearOldScanResults(); res.json({ message: "Cleared" }); });
+  app.get("/api/scan-results", safe(async (req, res) => { const r = await storage.getScanResults(); res.json(r); }));
+  app.delete("/api/scan-results", safe(async (req, res) => { await storage.clearOldScanResults(); res.json({ message: "Cleared" }); }));
 
   const httpServer = createServer(app);
   return httpServer;
