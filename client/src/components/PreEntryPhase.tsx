@@ -1,25 +1,38 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { apiRequest } from '@/lib/queryClient';
 import type { PriceAlert, Watchlist, ScanResult } from '@shared/schema';
-import { Bell } from 'lucide-react';
+import { AccentBar, EmptyState, PageHeader, Section } from '@/components/layout/primitives';
+import { cn } from '@/lib/utils';
+
+type AlertType = 'breakout' | 'breakdown';
+
+const th = 'pb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground';
+
+const price = (v: string | number | null | undefined) => {
+  const n = Number(v);
+  return v === null || v === undefined || v === '' || !Number.isFinite(n) ? '—' : n.toFixed(2);
+};
 
 export function PreEntryPhase() {
   const queryClient = useQueryClient();
   const [alertForm, setAlertForm] = useState({
     symbol: '',
     targetPrice: '',
-    alertType: 'breakout' as 'breakout' | 'breakdown',
+    alertType: 'breakout' as AlertType,
   });
   const [isLoadingPrice, setIsLoadingPrice] = useState(false);
+  const [priceNote, setPriceNote] = useState('');
+  // Ignores a slow price lookup that finishes after another symbol was picked.
+  const priceRequest = useRef(0);
 
-  const { data: priceAlerts = [] } = useQuery<PriceAlert[]>({
+  const { data: priceAlerts = [], isLoading: alertsLoading } = useQuery<PriceAlert[]>({
     queryKey: ['/api/price-alerts'],
-    select: (data) => data.filter(alert => alert.isActive),
+    select: (data) => data.filter((alert) => alert.isActive),
   });
 
   const { data: watchlists = [] } = useQuery<Watchlist[]>({
@@ -30,9 +43,19 @@ export function PreEntryPhase() {
     queryKey: ['/api/scan-results'],
   });
 
-  const availableSymbols = Array.from(
-    new Set(scanResults.map(result => result.symbol))
-  ).filter(Boolean);
+  // Symbols to choose from: focus list first, then flagged, then scan results.
+  const focusSymbols = watchlists.find((w) => w.type === 'focus')?.symbols ?? [];
+  const flaggedSymbols = (watchlists.find((w) => w.type === 'flagged')?.symbols ?? []).filter(
+    (s) => !focusSymbols.includes(s)
+  );
+  const listed = new Set([...focusSymbols, ...flaggedSymbols]);
+  const scanSymbols = Array.from(new Set(scanResults.map((r) => r.symbol))).filter((s) => s && !listed.has(s));
+  const symbolGroups = [
+    { label: 'Focus list', symbols: focusSymbols },
+    { label: 'Flagged list', symbols: flaggedSymbols },
+    { label: 'Scan results', symbols: scanSymbols },
+  ].filter((g) => g.symbols.length > 0);
+  const hasSymbols = symbolGroups.length > 0;
 
   const createAlertMutation = useMutation({
     mutationFn: (alertData: { symbol: string; targetPrice: string; alertType: string }) =>
@@ -44,244 +67,202 @@ export function PreEntryPhase() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/price-alerts'] });
       setAlertForm({ symbol: '', targetPrice: '', alertType: 'breakout' });
+      setPriceNote('');
     },
   });
 
   const deleteAlertMutation = useMutation({
-    mutationFn: (alertId: number) =>
-      apiRequest('DELETE', `/api/price-alerts/${alertId}`),
+    mutationFn: (alertId: number) => apiRequest('DELETE', `/api/price-alerts/${alertId}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/price-alerts'] });
     },
   });
 
-  const removeFromWatchlistMutation = useMutation({
-    mutationFn: ({ watchlistId, symbol }: { watchlistId: number; symbol: string }) => {
-      const watchlist = watchlists.find(w => w.id === watchlistId);
-      if (!watchlist) throw new Error('Watchlist not found');
-      
-      const updatedSymbols = watchlist.symbols.filter(s => s !== symbol);
-      return apiRequest('PATCH', `/api/watchlists/${watchlistId}`, {
-        symbols: updatedSymbols
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/watchlists'] });
-    },
-  });
+  const targetNum = Number(alertForm.targetPrice);
+  const targetValid = alertForm.targetPrice.trim() !== '' && Number.isFinite(targetNum) && targetNum > 0;
 
   const handleCreateAlert = (e: React.FormEvent) => {
     e.preventDefault();
-    if (alertForm.symbol && alertForm.targetPrice) {
+    if (alertForm.symbol && targetValid) {
       createAlertMutation.mutate(alertForm);
     }
   };
 
-  const handleRemoveFromWatchlist = (symbol: string, watchlistType: 'focus' | 'flagged') => {
-    const watchlist = watchlists.find(w => w.type === watchlistType);
-    if (watchlist) {
-      removeFromWatchlistMutation.mutate({ watchlistId: watchlist.id, symbol });
-    }
-  };
-
   const fetchPriceAndSetBreakout = async (symbol: string) => {
-    if (!symbol || symbol.length < 1) return;
-    
+    if (!symbol) return;
+    const request = ++priceRequest.current;
     setIsLoadingPrice(true);
+    setPriceNote('Looking up a suggested breakout level…');
     try {
-      const response = await fetch(`/api/stock-price/${symbol.toUpperCase()}`);
-      const data = await response.json();
-      
-      if (response.ok && data.suggestedBreakout) {
-        setAlertForm(prev => ({
-          ...prev,
-          targetPrice: data.suggestedBreakout.toString() // Ensure string for input
-        }));
+      const response = await fetch(`/api/stock-price/${encodeURIComponent(symbol.toUpperCase())}`, {
+        credentials: 'include',
+      });
+      const data = response.ok ? await response.json() : null;
+      if (request !== priceRequest.current) return;
+      const suggested = Number(data?.suggestedBreakout);
+      if (Number.isFinite(suggested) && suggested > 0) {
+        setAlertForm((prev) => ({ ...prev, targetPrice: suggested.toFixed(2) }));
+        setPriceNote(`Suggested from the last close (${price(data?.currentPrice)}). Adjust as needed.`);
       } else {
-        alert(data.message || 'Failed to fetch price data');
+        setPriceNote('No recent price available. Enter a target price.');
       }
-    } catch (error) {
-      console.error('Error fetching price:', error);
-      alert('Network error while fetching price');
+    } catch {
+      if (request === priceRequest.current) setPriceNote('No recent price available. Enter a target price.');
     } finally {
-      setIsLoadingPrice(false);
+      if (request === priceRequest.current) setIsLoadingPrice(false);
     }
   };
 
   const handleSymbolChange = (value: string) => {
-    setAlertForm(prev => ({ ...prev, symbol: value }));
-    
-    // Auto-fetch price when symbol is 3+ characters
-    if (value.length >= 3) {
-      fetchPriceAndSetBreakout(value);
-    }
+    setAlertForm((prev) => ({ ...prev, symbol: value, targetPrice: '' }));
+    fetchPriceAndSetBreakout(value);
   };
 
-  const focusList = watchlists.find(w => w.type === 'focus');
-  const flaggedList = watchlists.find(w => w.type === 'flagged');
-
   return (
-    <div className="bg-white dark:bg-dark-surface rounded-xl shadow-sm border border-gray-200 dark:border-dark-border p-6">
-      <h3 className="text-lg font-semibold mb-4 flex items-center">
-        <Bell className="inline-block shrink-0 h-4 w-4 text-trading-primary mr-2" aria-hidden="true" />
-        Phase 3: Pre-Entry Preparation
-      </h3>
+    <>
+      <PageHeader title="Alerts" description="Price levels you are watching for a breakout or breakdown." />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="space-y-4">
-          <h4 className="font-medium text-gray-900 dark:text-white">Focused Watchlist Review</h4>
-          
-          <div className="space-y-3">
-            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
-              <h5 className="font-medium text-trading-primary mb-2">Focus List ({focusList?.symbols.length || 0})</h5>
-              {focusList?.symbols.length ? (
-                <div className="flex flex-wrap gap-2">
-                  {focusList.symbols.map((symbol) => (
-                    <div key={symbol} className="flex items-center gap-1 px-2 py-1 bg-trading-primary text-white text-xs rounded">
-                      <span>{symbol}</span>
-                      <button
-                        onClick={() => handleRemoveFromWatchlist(symbol, 'focus')}
-                        disabled={removeFromWatchlistMutation.isPending}
-                        className="ml-1 text-white hover:text-red-200 text-xs font-bold"
-                        title="Remove from Focus List"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-gray-600 dark:text-gray-400">No stocks in focus list</p>
-              )}
-            </div>
-            
-            <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
-              <h5 className="font-medium text-gray-700 dark:text-gray-300 mb-2">Flagged List ({flaggedList?.symbols.length || 0})</h5>
-              {flaggedList?.symbols.length ? (
-                <div className="flex flex-wrap gap-2">
-                  {flaggedList.symbols.map((symbol) => (
-                    <div key={symbol} className="flex items-center gap-1 px-2 py-1 bg-gray-500 text-white text-xs rounded">
-                      <span>{symbol}</span>
-                      <button
-                        onClick={() => handleRemoveFromWatchlist(symbol, 'flagged')}
-                        disabled={removeFromWatchlistMutation.isPending}
-                        className="ml-1 text-white hover:text-red-200 text-xs font-bold"
-                        title="Remove from Flagged List"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-gray-600 dark:text-gray-400">No stocks in flagged list</p>
-              )}
-            </div>
-          </div>
+      <div className="grid gap-x-16 lg:grid-cols-3">
+        <div className="min-w-0 lg:col-span-2">
+          <Section title={`Active alerts · ${priceAlerts.length}`}>
+            {alertsLoading ? (
+              <p className="py-8 text-sm text-muted-foreground">Loading alerts…</p>
+            ) : priceAlerts.length === 0 ? (
+              <EmptyState title="No active alerts" description="Add a price level to watch for a stock on your lists." />
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left">
+                      <th className={th}>Symbol</th>
+                      <th className={th}>Type</th>
+                      <th className={cn(th, 'text-right')}>Target</th>
+                      <th className={cn(th, 'pl-6')}>Created</th>
+                      <th className={th}>
+                        <span className="sr-only">Actions</span>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/60">
+                    {priceAlerts.map((alert) => (
+                      <tr key={alert.id}>
+                        <td className="py-2.5">
+                          <span className="inline-flex items-center gap-3">
+                            <AccentBar signal={alert.alertType === 'breakdown' ? 'down' : 'warn'} orientation="vertical" />
+                            <span className="font-medium text-foreground">{alert.symbol}</span>
+                          </span>
+                        </td>
+                        <td className="py-2.5 capitalize text-muted-foreground">{alert.alertType}</td>
+                        <td className="py-2.5 text-right font-mono tabular-nums text-foreground">{price(alert.targetPrice)}</td>
+                        <td className="py-2.5 pl-6 text-muted-foreground">
+                          {alert.createdAt ? new Date(alert.createdAt).toLocaleDateString() : '—'}
+                        </td>
+                        <td className="py-2.5 text-right">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-xs text-muted-foreground hover:text-signal-down"
+                            disabled={deleteAlertMutation.isPending}
+                            onClick={() => {
+                              if (window.confirm(`Delete the ${alert.symbol} price alert?`)) {
+                                deleteAlertMutation.mutate(alert.id);
+                              }
+                            }}
+                          >
+                            Delete
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Section>
         </div>
 
-        <div className="space-y-4">
-          <h4 className="font-medium text-gray-900 dark:text-white">Set Price Alerts</h4>
-          
-          <form onSubmit={handleCreateAlert} className="space-y-3">
-            <div>
-              <Label htmlFor="symbol">Stock Symbol</Label>
-              <Select
-                value={alertForm.symbol}
-                onValueChange={handleSymbolChange}
-                disabled={availableSymbols.length === 0}
-              >
-                <SelectTrigger id="symbol" className="w-full">
-                  <SelectValue placeholder="Choose a symbol from scan results" />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableSymbols.map(symbol => (
-                    <SelectItem key={symbol} value={symbol}>
-                      {symbol}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {isLoadingPrice && (
-                <p className="text-xs text-gray-500 mt-1">Loading price...</p>
-              )}
-              {availableSymbols.length === 0 && (
-                <p className="text-xs text-gray-500 mt-1">
-                  Run a scan first to select a stock.
-                </p>
-              )}
-            </div>
-            <div>
-              <Label htmlFor="targetPrice">Target Price ($)</Label>
-              <Input
-                id="targetPrice"
-                type="number"
-                step="0.01"
-                value={alertForm.targetPrice}
-                onChange={(e) => setAlertForm(prev => ({ ...prev, targetPrice: e.target.value }))}
-                placeholder="0.00"
-              />
-            </div>
-            <div>
-              <Label htmlFor="alertType">Alert Type</Label>
-              <select
-                id="alertType"
-                value={alertForm.alertType}
-                onChange={(e) => setAlertForm(prev => ({ ...prev, alertType: e.target.value as 'breakout' | 'breakdown' }))}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-trading-primary focus:border-trading-primary dark:bg-gray-700 dark:text-white"
-              >
-                <option value="breakout">Breakout</option>
-                <option value="breakdown">Breakdown</option>
-              </select>
-            </div>
-            <Button 
-              type="submit" 
-              className="w-full"
-              disabled={createAlertMutation.isPending || !alertForm.symbol || !alertForm.targetPrice}
-            >
-              {createAlertMutation.isPending ? 'Creating Alert...' : 'Create Price Alert'}
-            </Button>
-          </form>
-        </div>
-      </div>
+        <div className="min-w-0">
+          <Section title="New alert">
+            <form onSubmit={handleCreateAlert} className="space-y-5">
+              <div className="space-y-2">
+                <Label htmlFor="symbol">Symbol</Label>
+                <Select value={alertForm.symbol} onValueChange={handleSymbolChange} disabled={!hasSymbols}>
+                  <SelectTrigger id="symbol" className="w-full border-0 bg-muted">
+                    <SelectValue placeholder={hasSymbols ? 'Choose a symbol' : 'No symbols yet'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {symbolGroups.map((group) => (
+                      <SelectGroup key={group.label}>
+                        <SelectLabel className="text-xs font-normal text-muted-foreground">{group.label}</SelectLabel>
+                        {group.symbols.map((symbol) => (
+                          <SelectItem key={`${group.label}-${symbol}`} value={symbol}>
+                            {symbol}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {!hasSymbols && (
+                  <p className="text-xs text-muted-foreground">Run a scan or add stocks to a watchlist first.</p>
+                )}
+              </div>
 
-      <div className="mt-6">
-        <h4 className="font-medium text-gray-900 dark:text-white mb-3">Active Price Alerts</h4>
-        {priceAlerts.length === 0 ? (
-          <div className="text-center py-4">
-            <p className="text-gray-600 dark:text-gray-400">No active price alerts</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {priceAlerts.map((alert) => (
-              <div key={alert.id} className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
-                <div className="flex justify-between items-center">
-                  <span className="font-medium text-gray-900 dark:text-white">{alert.symbol}</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-600 dark:text-gray-400 capitalize">{alert.alertType}</span>
-                    <Button
+              <div className="space-y-2">
+                <Label>Alert when price</Label>
+                <div className="inline-flex rounded-md bg-muted p-0.5" role="radiogroup" aria-label="Alert type">
+                  {(['breakout', 'breakdown'] as AlertType[]).map((type) => (
+                    <button
+                      key={type}
                       type="button"
-                      variant="destructive"
-                      size="sm"
-                      disabled={deleteAlertMutation.isPending}
-                      onClick={() => {
-                        if (window.confirm(`Delete the ${alert.symbol} price alert?`)) {
-                          deleteAlertMutation.mutate(alert.id);
-                        }
-                      }}
+                      role="radio"
+                      aria-checked={alertForm.alertType === type}
+                      onClick={() => setAlertForm((prev) => ({ ...prev, alertType: type }))}
+                      className={cn(
+                        'rounded px-3 py-1 text-xs transition-colors',
+                        alertForm.alertType === type
+                          ? 'bg-background text-foreground'
+                          : 'text-muted-foreground hover:text-foreground'
+                      )}
                     >
-                      Delete
-                    </Button>
-                  </div>
-                </div>
-                <div className="text-sm text-gray-700 dark:text-gray-300">
-                  Target: ${alert.targetPrice}
+                      {type === 'breakout' ? 'Rises above' : 'Falls below'}
+                    </button>
+                  ))}
                 </div>
               </div>
-            ))}
-          </div>
-        )}
+
+              <div className="space-y-2">
+                <Label htmlFor="targetPrice">Target price</Label>
+                <Input
+                  id="targetPrice"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  inputMode="decimal"
+                  value={alertForm.targetPrice}
+                  onChange={(e) => setAlertForm((prev) => ({ ...prev, targetPrice: e.target.value }))}
+                  placeholder="0.00"
+                  className="border-0 bg-muted font-mono"
+                />
+                {priceNote && <p className="text-xs text-muted-foreground">{priceNote}</p>}
+              </div>
+
+              {createAlertMutation.isError && (
+                <p className="text-xs text-signal-down">Could not create the alert. Try again.</p>
+              )}
+
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={createAlertMutation.isPending || isLoadingPrice || !alertForm.symbol || !targetValid}
+              >
+                {createAlertMutation.isPending ? 'Creating…' : 'Create alert'}
+              </Button>
+            </form>
+          </Section>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
