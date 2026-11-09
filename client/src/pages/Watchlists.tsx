@@ -130,7 +130,7 @@ export default function Watchlists() {
                 // Invisible copy of the row's Focus button, so the column labels line up.
                 <Button size="sm" variant="ghost" className="invisible h-7 px-2 text-xs" tabIndex={-1}>
                   <ArrowUp />
-                  Focus
+                  <span className="hidden sm:inline">Focus</span>
                 </Button>
               )}
               {list && <span className="w-7 shrink-0" />}
@@ -176,9 +176,10 @@ export default function Watchlists() {
                       onClick={() => promoteMutation.mutate(symbol)}
                       disabled={busy}
                       title={`Move ${symbol} to the focus list`}
+                      aria-label={`Move ${symbol} to the focus list`}
                     >
                       <ArrowUp aria-hidden="true" />
-                      Focus
+                      <span className="hidden sm:inline">Focus</span>
                     </Button>
                   )}
                   {list && (
