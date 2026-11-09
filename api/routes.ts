@@ -428,8 +428,8 @@ export async function registerRoutes(app: Express) {
 
   app.post("/api/run-scans", (req, res, next) => { if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" }); next(); }, safe(async (req, res) => { await storage.clearOldScanResults(); exec('.venv/bin/python api/simple_scan.py', (err, stdout) => { let data: any[]; try { data = JSON.parse(stdout); } catch { return res.status(500).json({ message: "Scan failed" }); } Promise.all(data.map((s: any) => storage.createScanResult({ symbol: s.symbol, scanType: '1day', price: s.price.toFixed(2), change: "0", changePercent: s.change_percent.toFixed(2), volume: s.volume, sector: s.sector, dollarVolume: (s.price * s.volume).toString() }))).then(() => res.json({ count: data.length })).catch((e) => { console.error("Saving scan results failed:", e instanceof Error ? e.message : e); res.status(500).json({ message: "Scan failed" }); }); }); }));
   app.post("/api/run-scans-v2", (req, res, next) => { if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" }); next(); }, runScansV2);
-  app.get("/api/scan-results", safe(async (req, res) => { const r = await storage.getScanResults(); res.json(r); }));
-  app.delete("/api/scan-results", safe(async (req, res) => { await storage.clearOldScanResults(); res.json({ message: "Cleared" }); }));
+  app.get("/api/scan-results", safe(async (req, res) => { if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" }); const r = await storage.getScanResults(); res.json(r); }));
+  app.delete("/api/scan-results", safe(async (req, res) => { if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" }); await storage.clearOldScanResults(); res.json({ message: "Cleared" }); }));
 
   const httpServer = createServer(app);
   return httpServer;
