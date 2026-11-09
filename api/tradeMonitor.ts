@@ -27,11 +27,50 @@ function marketDate(date: Date): string {
   }).format(date);
 }
 
-// Fetch each unique symbol once and use the close of the most recent
-// COMPLETED daily bar: any bar dated today (New York time) is ignored, even
-// after the close, so an unfinished bar is never used. Symbols without a
-// valid price are left out, so their trades are skipped for this cycle
-// instead of being closed.
+// In-memory cache of completed daily closes, keyed by "SYMBOL|YYYY-MM-DD"
+// (New York trading date of the check). A completed bar cannot change during
+// the day, so each symbol is fetched once per New York date. Only valid
+// prices are stored; failed requests and invalid prices are retried on the
+// next cycle. Entries from earlier dates are dropped when the date changes.
+const dailyCloseCache = new Map<string, DailyClose>();
+
+function cacheKey(symbol: string, today: string): string {
+  return `${symbol}|${today}`;
+}
+
+// Request recent daily bars for one symbol and return the close of the most
+// recent COMPLETED bar: any bar dated today (New York time) is ignored, even
+// after the close, so an unfinished bar is never used. Returns null when no
+// completed bar has a finite, positive close. Throws if the request fails.
+export async function fetchCompletedDailyClose(
+  symbol: string,
+  apiKey: string,
+  now: Date = new Date()
+): Promise<DailyClose | null> {
+  const today = marketDate(now);
+  const start = marketDate(new Date(now.getTime() - LOOKBACK_DAYS * 24 * 60 * 60 * 1000));
+
+  const bars = await getHistoricalAggregates(symbol, apiKey, start, today);
+
+  const completed = bars
+    .map((bar: { date: string; close: number }) => ({
+      barDate: marketDate(new Date(bar.date)),
+      price: Number(bar.close),
+    }))
+    .filter((bar: DailyClose) => bar.barDate < today);
+
+  const latest: DailyClose | undefined = completed[completed.length - 1];
+
+  if (!latest || !Number.isFinite(latest.price) || latest.price <= 0) {
+    return null;
+  }
+
+  return latest;
+}
+
+// Price each unique symbol once per cycle, reusing today's cached close when
+// available. Symbols without a valid price are left out, so their trades are
+// skipped for this cycle instead of being closed.
 async function getCurrentPrices(symbols: string[]): Promise<Map<string, DailyClose>> {
   const prices = new Map<string, DailyClose>();
   const apiKey = process.env.MASSIVE_API_KEY;
@@ -43,29 +82,32 @@ async function getCurrentPrices(symbols: string[]): Promise<Map<string, DailyClo
 
   const now = new Date();
   const today = marketDate(now);
-  const start = marketDate(new Date(now.getTime() - LOOKBACK_DAYS * 24 * 60 * 60 * 1000));
+
+  // New York date changed: drop closes cached for earlier dates.
+  for (const key of Array.from(dailyCloseCache.keys())) {
+    if (!key.endsWith(`|${today}`)) dailyCloseCache.delete(key);
+  }
 
   for (const symbol of Array.from(new Set(symbols))) {
+    const key = cacheKey(symbol, today);
+    const cached = dailyCloseCache.get(key);
+    if (cached) {
+      prices.set(symbol, cached);
+      continue;
+    }
+
     try {
-      const bars = await getHistoricalAggregates(symbol, apiKey, start, today);
+      const latest = await fetchCompletedDailyClose(symbol, apiKey, now);
 
-      const completed = bars
-        .map((bar: { date: string; close: number }) => ({
-          barDate: marketDate(new Date(bar.date)),
-          price: Number(bar.close),
-        }))
-        .filter((bar: DailyClose) => bar.barDate < today);
-
-      const latest = completed[completed.length - 1];
-
-      if (!latest || !Number.isFinite(latest.price) || latest.price <= 0) {
+      if (!latest) {
         console.error(`Trade monitor: no valid completed daily bar for ${symbol}; skipping this quote.`);
         continue;
       }
 
       console.log(
-        `Trade monitor: ${symbol} close $${latest.price.toFixed(2)} from completed daily bar ${latest.barDate}`
+        `Trade monitor: ${symbol} close $${latest.price.toFixed(2)} from completed daily bar ${latest.barDate} (cached for ${today})`
       );
+      dailyCloseCache.set(key, latest);
       prices.set(symbol, latest);
     } catch (error) {
       console.error(`Trade monitor: could not get a price for ${symbol}; skipping this quote:`, error);
