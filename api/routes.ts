@@ -403,9 +403,18 @@ export async function registerRoutes(app: Express) {
     if (!apiKey) return res.status(500).json({ message: "API key not configured" });
     const bars = await recentDailyBars(s, apiKey);
     if (!bars) return res.status(404).json({ message: "No recent price for this symbol" });
+    // Breakout level for the next day: the higher of 2% above the day's high or 3% above its close.
+    const breakoutFrom = (bar: { high: number; close: number }) => Math.max(bar.high * 1.02, bar.close * 1.03);
     const latest = bars[bars.length - 1];
-    const suggested = Math.max(latest.high * 1.02, latest.close * 1.03);
-    res.json({ symbol: s, currentPrice: latest.close.toFixed(2), suggestedBreakout: suggested.toFixed(2) });
+    const previous = bars.length > 1 ? bars[bars.length - 2] : null;
+    res.json({
+      symbol: s,
+      currentPrice: latest.close.toFixed(2),
+      suggestedBreakout: breakoutFrom(latest).toFixed(2),
+      // The level the latest day had to beat, and that day's date, for "did it break out?".
+      previousBreakout: previous ? breakoutFrom(previous).toFixed(2) : null,
+      barDate: latest.barDate,
+    });
   }));
 
   app.get("/api/market-data", safe(async (req, res) => {

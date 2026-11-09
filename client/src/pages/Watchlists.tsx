@@ -20,7 +20,11 @@ interface StockPrice {
   symbol: string;
   currentPrice: string;
   suggestedBreakout: string;
+  previousBreakout?: string | null; // level the latest day had to beat (newer servers only)
+  barDate?: string;
 }
+
+const breakoutLime = 'text-lime-600 dark:text-lime-400';
 
 const fmt = (v: string | number | null | undefined) => {
   const n = Number(v);
@@ -190,17 +194,38 @@ export default function Watchlists() {
               const active = symbol === chartSymbol;
               const price = prices.get(symbol);
               const myAlert = alertPrice.get(symbol);
-              const close = price?.isLoading ? '…' : fmt(price?.data?.currentPrice);
-              const breakout = price?.isLoading ? '…' : fmt(price?.data?.suggestedBreakout);
+              const data = price?.data;
+              const closeNum = Number(data?.currentPrice);
+              // Show the level the latest day had to beat; older servers only send the next level.
+              const level = data?.previousBreakout ?? data?.suggestedBreakout;
+              const levelNum = Number(level);
+              const hasClose = Number.isFinite(closeNum) && closeNum > 0;
+              const beatLevel =
+                hasClose && data?.previousBreakout != null && Number.isFinite(levelNum) && closeNum >= levelNum;
+              const beatAlert = hasClose && myAlert !== undefined && closeNum >= myAlert;
+              const brokeOut = beatLevel || beatAlert;
+              const close = price?.isLoading ? '…' : fmt(data?.currentPrice);
+              const breakout = price?.isLoading ? '…' : fmt(level);
+              const day = data?.barDate
+                ? new Date(`${data.barDate}T12:00:00Z`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+                : 'the last trading day';
+              const brokeOutNote = brokeOut
+                ? `Broke out: closed ${close} on ${day}, at or above ${[
+                    beatLevel ? `the breakout level ${breakout}` : '',
+                    beatAlert ? `your alert ${myAlert!.toFixed(2)}` : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' and ')}.`
+                : '';
               return (
                 <li key={symbol} className="group flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => setSelected(symbol)}
                     aria-pressed={active}
-                    aria-label={`${symbol}: close ${close}, suggested breakout ${breakout}${
+                    aria-label={`${symbol}: close ${close}, breakout level ${breakout}${
                       myAlert !== undefined ? `, your breakout alert ${myAlert.toFixed(2)}` : ''
-                    }`}
+                    }${brokeOut ? `. ${brokeOutNote}` : ''}`}
                     className={cn(
                       'flex min-w-0 flex-1 items-center gap-2 py-2.5 text-left text-sm transition-colors',
                       active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
@@ -216,7 +241,12 @@ export default function Watchlists() {
                       </span>
                     </span>
                     <span className={cn(numCol, 'text-muted-foreground')}>{close}</span>
-                    <span className={cn(numCol, 'text-foreground')}>{breakout}</span>
+                    <span
+                      className={cn(numCol, brokeOut ? cn(breakoutLime, 'font-semibold') : 'text-foreground')}
+                      title={brokeOut ? brokeOutNote : `Breakout level for ${day}: 2% above the prior day's high or 3% above its close, whichever is higher.`}
+                    >
+                      {breakout}
+                    </span>
                   </button>
                   <YahooQuoteLink symbol={symbol} />
                   {type === 'flagged' && (
