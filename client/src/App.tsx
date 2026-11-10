@@ -15,6 +15,7 @@ import Alerts from "@/pages/Alerts";
 import TradePlanner from "@/pages/TradePlanner";
 import Positions from "@/pages/Positions";
 import Journal from "@/pages/Journal";
+import Learn from "@/pages/Learn";
 import Profile from "@/pages/Profile";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
@@ -50,6 +51,7 @@ function AppRoutes() {
           <Route path="/plan" component={TradePlanner} />
           <Route path="/positions" component={Positions} />
           <Route path="/journal" component={Journal} />
+          <Route path="/learn" component={Learn} />
           <Route path="/profile" component={Profile} />
           <Route component={NotFound} />
         </Switch>
