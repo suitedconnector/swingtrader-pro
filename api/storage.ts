@@ -9,6 +9,12 @@ import { eq, sql, and } from "drizzle-orm";
 // InsertTrade omits exitDate; closing a trade must be able to set it.
 export type TradeUpdate = Partial<InsertTrade> & { exitDate?: Date | null };
 
+// Result of selling part of an open trade: the new closed row for the sold
+// shares and the open trade with its smaller share count and risk.
+export type TrimResult =
+  | { ok: true; trim: Trade; remaining: Trade }
+  | { ok: false; reason: "not_found" | "too_many_shares" };
+
 export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
@@ -32,6 +38,7 @@ export interface IStorage {
   getTrade(id: number, userId: number): Promise<Trade | undefined>;
   createTrade(trade: InsertTrade): Promise<Trade>;
   updateTrade(id: number, userId: number, updates: TradeUpdate): Promise<Trade | undefined>;
+  trimTrade(id: number, userId: number, shares: number, exitPrice: string): Promise<TrimResult>;
   getPriceAlerts(userId: number): Promise<PriceAlert[]>;
   getActivePriceAlerts(userId: number): Promise<PriceAlert[]>;
   getAllActivePriceAlerts(): Promise<PriceAlert[]>;
@@ -139,6 +146,48 @@ export class DatabaseStorage implements IStorage {
   async updateTrade(id: number, userId: number, updates: TradeUpdate): Promise<Trade | undefined> {
     const [trade] = await db.update(trades).set(updates).where(and(eq(trades.id, id), eq(trades.userId, userId))).returning();
     return trade || undefined;
+  }
+  // Sells part of an open trade. In one transaction it saves the sold shares
+  // as their own closed trade (exit reason "trim", with price and P&L) and
+  // lowers the open trade's shares and risk. Risk is split by shares in whole
+  // cents, so the two parts add up to the original risk.
+  async trimTrade(id: number, userId: number, shares: number, exitPrice: string): Promise<TrimResult> {
+    return await db.transaction(async (tx) => {
+      const [trade] = await tx.select().from(trades)
+        .where(and(eq(trades.id, id), eq(trades.userId, userId), eq(trades.status, 'active')))
+        .for('update');
+      if (!trade) return { ok: false as const, reason: "not_found" as const };
+      if (shares >= trade.shares) return { ok: false as const, reason: "too_many_shares" as const };
+
+      const riskCents = Math.round(Number(trade.riskAmount) * 100);
+      const remainingShares = trade.shares - shares;
+      const remainingRiskCents = Math.round((riskCents * remainingShares) / trade.shares);
+      const trimRiskCents = riskCents - remainingRiskCents;
+      const pnl = (Number(exitPrice) - Number(trade.entryPrice)) * shares;
+
+      const [trim] = await tx.insert(trades).values({
+        userId: trade.userId,
+        symbol: trade.symbol,
+        entryPrice: trade.entryPrice,
+        stopLoss: trade.stopLoss,
+        profitTarget: trade.profitTarget,
+        shares,
+        riskAmount: (trimRiskCents / 100).toFixed(2),
+        status: 'closed',
+        exitReason: 'trim',
+        entryDate: trade.entryDate,
+        exitDate: new Date(),
+        exitPrice,
+        pnl: pnl.toFixed(2),
+      }).returning();
+
+      const [remaining] = await tx.update(trades)
+        .set({ shares: remainingShares, riskAmount: (remainingRiskCents / 100).toFixed(2) })
+        .where(eq(trades.id, trade.id))
+        .returning();
+
+      return { ok: true as const, trim, remaining };
+    });
   }
   async getPriceAlerts(userId: number): Promise<PriceAlert[]> {
     return await db.select().from(priceAlerts).where(eq(priceAlerts.userId, userId));

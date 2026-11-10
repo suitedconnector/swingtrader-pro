@@ -43,6 +43,9 @@ const RULES = [
 export default function Positions() {
   const queryClient = useQueryClient();
   const [exitTrade, setExitTrade] = useState<Trade | null>(null);
+  // 'exit' sells every share; 'trim' sells some and keeps the trade open.
+  const [mode, setMode] = useState<'exit' | 'trim'>('exit');
+  const [trimShares, setTrimShares] = useState('');
   const [exitPrice, setExitPrice] = useState('');
   const [priceNote, setPriceNote] = useState('');
   // Ignores a slow price lookup that finishes after another Exit was opened.
@@ -62,26 +65,28 @@ export default function Positions() {
     },
   });
 
-  const sharesToTrim = (trade: Trade) => Math.floor(trade.shares * (TRIM_PERCENT / 100));
+  // The server saves the sold shares as a closed "trim" trade with its P&L
+  // and lowers the open trade's shares and risk.
+  const trimTradeMutation = useMutation({
+    mutationFn: ({ id, shares, exitPrice }: { id: number; shares: number; exitPrice: string }) =>
+      apiRequest('POST', `/api/trades/${id}/trim`, { shares, exitPrice }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/trades'] });
+    },
+  });
 
-  const handleTrimPosition = (trade: Trade) => {
-    const sold = sharesToTrim(trade);
-    if (sold <= 0) return;
-    const remainingShares = trade.shares - sold;
-    // Keep the recorded risk in line with the smaller position.
-    const remainingRisk = (Number(trade.riskAmount) * remainingShares) / trade.shares;
+  // Default trim size: 25% of the shares, at least 1, always leaving 1 open.
+  const defaultTrim = (trade: Trade) =>
+    Math.min(trade.shares - 1, Math.max(1, Math.floor(trade.shares * (TRIM_PERCENT / 100))));
 
-    updateTradeMutation.mutate({
-      id: trade.id,
-      updates: {
-        shares: remainingShares,
-        riskAmount: remainingRisk.toFixed(2),
-      },
-    });
-  };
+  const busy = updateTradeMutation.isPending || trimTradeMutation.isPending;
 
-  const openExit = async (trade: Trade) => {
+  const openExit = async (trade: Trade, nextMode: 'exit' | 'trim' = 'exit') => {
     const request = ++exitRequest.current;
+    updateTradeMutation.reset();
+    trimTradeMutation.reset();
+    setMode(nextMode);
+    setTrimShares(nextMode === 'trim' ? String(defaultTrim(trade)) : '');
     setExitTrade(trade);
     setExitPrice('');
     setPriceNote('Fetching the last close…');
@@ -106,7 +111,21 @@ export default function Positions() {
 
   const exitPriceNum = Number(exitPrice);
   const exitPriceValid = exitPrice.trim() !== '' && Number.isFinite(exitPriceNum) && exitPriceNum > 0;
-  const exitPnl = exitTrade && exitPriceValid ? (exitPriceNum - Number(exitTrade.entryPrice)) * exitTrade.shares : null;
+  const trimSharesNum = Number(trimShares);
+  const trimSharesValid =
+    exitTrade !== null && Number.isInteger(trimSharesNum) && trimSharesNum >= 1 && trimSharesNum < exitTrade.shares;
+  const soldShares = mode === 'trim' ? (trimSharesValid ? trimSharesNum : null) : exitTrade?.shares ?? null;
+  const exitPnl =
+    exitTrade && exitPriceValid && soldShares !== null ? (exitPriceNum - Number(exitTrade.entryPrice)) * soldShares : null;
+  const activeError = mode === 'trim' ? trimTradeMutation.isError : updateTradeMutation.isError;
+
+  const confirmTrim = () => {
+    if (!exitTrade || !exitPriceValid || !trimSharesValid) return;
+    trimTradeMutation.mutate(
+      { id: exitTrade.id, shares: trimSharesNum, exitPrice: exitPriceNum.toFixed(2) },
+      { onSuccess: () => setExitTrade(null) }
+    );
+  };
 
   const confirmExit = () => {
     if (!exitTrade || !exitPriceValid || exitPnl === null) return;
@@ -191,18 +210,18 @@ export default function Positions() {
                           size="sm"
                           variant="ghost"
                           className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
-                          onClick={() => handleTrimPosition(trade)}
-                          disabled={updateTradeMutation.isPending || sharesToTrim(trade) <= 0}
-                          title={`Sell ${sharesToTrim(trade)} of ${trade.shares} shares`}
+                          onClick={() => openExit(trade, 'trim')}
+                          disabled={busy || trade.shares < 2}
+                          title={trade.shares < 2 ? 'Only 1 share left. Use Exit.' : 'Sell part of this position'}
                         >
-                          Trim {TRIM_PERCENT}%
+                          Trim
                         </Button>
                         <Button
                           size="sm"
                           variant="ghost"
                           className="h-7 px-2 text-xs text-signal-down hover:text-signal-down"
                           onClick={() => openExit(trade)}
-                          disabled={updateTradeMutation.isPending}
+                          disabled={busy}
                         >
                           Exit
                         </Button>
@@ -234,13 +253,34 @@ export default function Positions() {
       <Dialog open={exitTrade !== null} onOpenChange={(open) => !open && setExitTrade(null)}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Close {exitTrade?.symbol}</DialogTitle>
+            <DialogTitle>
+              {mode === 'trim' ? 'Trim' : 'Close'} {exitTrade?.symbol}
+            </DialogTitle>
             <DialogDescription>
-              Marks all {exitTrade?.shares} shares as sold and moves the trade to the journal.
+              {mode === 'trim'
+                ? `Sells part of your ${exitTrade?.shares} shares. The sold shares and their P&L go to the journal; the rest stays open.`
+                : `Marks all ${exitTrade?.shares} shares as sold and moves the trade to the journal.`}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
-            <Label htmlFor="exit-price">Exit price</Label>
+            {mode === 'trim' && exitTrade && (
+              <div className="space-y-2 pb-2">
+                <Label htmlFor="trim-shares">Shares to sell</Label>
+                <Input
+                  id="trim-shares"
+                  inputMode="numeric"
+                  value={trimShares}
+                  onChange={(e) => setTrimShares(e.target.value)}
+                  className="font-mono"
+                />
+                <p className={cn('text-xs', trimShares !== '' && !trimSharesValid ? 'text-signal-down' : 'text-muted-foreground')}>
+                  {trimSharesValid
+                    ? `${exitTrade.shares - trimSharesNum} shares stay open.`
+                    : `Enter 1 to ${exitTrade.shares - 1}. To sell all ${exitTrade.shares}, use Exit.`}
+                </p>
+              </div>
+            )}
+            <Label htmlFor="exit-price">{mode === 'trim' ? 'Sale price' : 'Exit price'}</Label>
             <Input
               id="exit-price"
               inputMode="decimal"
@@ -258,17 +298,25 @@ export default function Positions() {
                 </span>
               </p>
             )}
-            {updateTradeMutation.isError && (
-              <p className="text-xs text-signal-down">Could not close the trade. Try again.</p>
+            {activeError && (
+              <p className="text-xs text-signal-down">
+                {mode === 'trim' ? 'Could not save the trim. Try again.' : 'Could not close the trade. Try again.'}
+              </p>
             )}
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setExitTrade(null)}>
               Cancel
             </Button>
-            <Button onClick={confirmExit} disabled={!exitPriceValid || updateTradeMutation.isPending}>
-              {updateTradeMutation.isPending ? 'Closing…' : 'Close position'}
-            </Button>
+            {mode === 'trim' ? (
+              <Button onClick={confirmTrim} disabled={!exitPriceValid || !trimSharesValid || busy}>
+                {trimTradeMutation.isPending ? 'Saving…' : 'Save trim'}
+              </Button>
+            ) : (
+              <Button onClick={confirmExit} disabled={!exitPriceValid || busy}>
+                {updateTradeMutation.isPending ? 'Closing…' : 'Close position'}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
