@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowUp, X } from 'lucide-react';
+import { ArrowUp, ChevronDown, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { apiRequest } from '@/lib/queryClient';
@@ -20,7 +20,11 @@ interface StockPrice {
   symbol: string;
   currentPrice: string;
   suggestedBreakout: string;
+  previousBreakout?: string | null; // level the latest day had to beat (newer servers only)
+  barDate?: string;
 }
+
+const breakoutLime = 'text-lime-600 dark:text-lime-400';
 
 const fmt = (v: string | number | null | undefined) => {
   const n = Number(v);
@@ -29,11 +33,35 @@ const fmt = (v: string | number | null | undefined) => {
 
 const numCol = 'w-16 shrink-0 text-right font-mono tabular-nums';
 
+// Which lists are collapsed, remembered in this browser only.
+const COLLAPSED_KEY = 'watchlists.collapsed';
+function loadCollapsed(): Record<string, boolean> {
+  try {
+    const raw = window.localStorage.getItem(COLLAPSED_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
 export default function Watchlists() {
   const queryClient = useQueryClient();
   const { theme } = useThemeContext();
   const [selected, setSelected] = useState<string | null>(null);
   const [newSymbol, setNewSymbol] = useState('');
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>(loadCollapsed);
+
+  const toggleList = (key: string) =>
+    setCollapsed((prev) => {
+      const next = { ...prev, [key]: !prev[key] };
+      try {
+        window.localStorage.setItem(COLLAPSED_KEY, JSON.stringify(next));
+      } catch {
+        // Storage unavailable (private window); the toggle still works for this visit.
+      }
+      return next;
+    });
 
   const { data: watchlists = [], isLoading } = useQuery<Watchlist[]>({ queryKey: ['/api/watchlists'] });
 
@@ -113,8 +141,35 @@ export default function Watchlists() {
 
   const renderList = (list: Watchlist | undefined, title: string, type?: ListType) => {
     const symbols = list?.symbols ?? [];
+    const key = type ?? `list-${list?.id}`;
+    const isCollapsed = !!collapsed[key];
+    const bodyId = `watchlist-${key}`;
     return (
-      <Section title={`${title} · ${symbols.length}`}>
+      <Section>
+        <button
+          type="button"
+          onClick={() => toggleList(key)}
+          aria-expanded={!isCollapsed}
+          aria-controls={bodyId}
+          className={cn(
+            'flex w-full min-w-0 items-center gap-2 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground',
+            !isCollapsed && 'mb-4'
+          )}
+        >
+          <ChevronDown
+            aria-hidden="true"
+            className={cn('h-3.5 w-3.5 shrink-0 transition-transform', isCollapsed && '-rotate-90')}
+          />
+          <span className="shrink-0">
+            {title} · {symbols.length}
+          </span>
+          {isCollapsed && symbols.length > 0 && (
+            <span className="min-w-0 truncate font-mono normal-case tracking-normal text-muted-foreground/70">
+              {symbols.join('  ')}
+            </span>
+          )}
+        </button>
+        <div id={bodyId} hidden={isCollapsed}>
         {symbols.length === 0 ? (
           <p className="py-2 text-sm text-muted-foreground">
             {type === 'focus' ? 'Stocks you plan to trade soon.' : type === 'flagged' ? 'Stocks to keep an eye on.' : 'Empty.'}
@@ -139,17 +194,38 @@ export default function Watchlists() {
               const active = symbol === chartSymbol;
               const price = prices.get(symbol);
               const myAlert = alertPrice.get(symbol);
-              const close = price?.isLoading ? '…' : fmt(price?.data?.currentPrice);
-              const breakout = price?.isLoading ? '…' : fmt(price?.data?.suggestedBreakout);
+              const data = price?.data;
+              const closeNum = Number(data?.currentPrice);
+              // Show the level the latest day had to beat; older servers only send the next level.
+              const level = data?.previousBreakout ?? data?.suggestedBreakout;
+              const levelNum = Number(level);
+              const hasClose = Number.isFinite(closeNum) && closeNum > 0;
+              const beatLevel =
+                hasClose && data?.previousBreakout != null && Number.isFinite(levelNum) && closeNum >= levelNum;
+              const beatAlert = hasClose && myAlert !== undefined && closeNum >= myAlert;
+              const brokeOut = beatLevel || beatAlert;
+              const close = price?.isLoading ? '…' : fmt(data?.currentPrice);
+              const breakout = price?.isLoading ? '…' : fmt(level);
+              const day = data?.barDate
+                ? new Date(`${data.barDate}T12:00:00Z`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+                : 'the last trading day';
+              const brokeOutNote = brokeOut
+                ? `Broke out: closed ${close} on ${day}, at or above ${[
+                    beatLevel ? `the breakout level ${breakout}` : '',
+                    beatAlert ? `your alert ${myAlert!.toFixed(2)}` : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' and ')}.`
+                : '';
               return (
                 <li key={symbol} className="group flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => setSelected(symbol)}
                     aria-pressed={active}
-                    aria-label={`${symbol}: close ${close}, suggested breakout ${breakout}${
+                    aria-label={`${symbol}: close ${close}, breakout level ${breakout}${
                       myAlert !== undefined ? `, your breakout alert ${myAlert.toFixed(2)}` : ''
-                    }`}
+                    }${brokeOut ? `. ${brokeOutNote}` : ''}`}
                     className={cn(
                       'flex min-w-0 flex-1 items-center gap-2 py-2.5 text-left text-sm transition-colors',
                       active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
@@ -165,7 +241,12 @@ export default function Watchlists() {
                       </span>
                     </span>
                     <span className={cn(numCol, 'text-muted-foreground')}>{close}</span>
-                    <span className={cn(numCol, 'text-foreground')}>{breakout}</span>
+                    <span
+                      className={cn(numCol, brokeOut ? cn(breakoutLime, 'font-semibold') : 'text-foreground')}
+                      title={brokeOut ? brokeOutNote : `Breakout level for ${day}: 2% above the prior day's high or 3% above its close, whichever is higher.`}
+                    >
+                      {breakout}
+                    </span>
                   </button>
                   <YahooQuoteLink symbol={symbol} />
                   {type === 'flagged' && (
@@ -199,6 +280,7 @@ export default function Watchlists() {
             })}
           </ul>
         )}
+        </div>
       </Section>
     );
   };

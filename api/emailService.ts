@@ -1,4 +1,5 @@
 import Mailjet from 'node-mailjet';
+import { DISCLAIMER_FULL } from '../shared/disclaimer';
 
 const isEmailEnabled = !!(process.env.MAILJET_API_KEY && process.env.MAILJET_SECRET_KEY);
 
@@ -72,6 +73,8 @@ export async function sendPriceAlertEmail(params: PriceAlertEmailParams): Promis
         <div style="background: #1f2937; color: #9ca3af; padding: 15px; text-align: center; font-size: 12px;">
           <p style="margin: 0;">Trading Dashboard - Automated Price Alert</p>
           <p style="margin: 0;">Time: ${new Date().toLocaleString()}</p>
+          <p style="margin: 10px 0 0; font-weight: bold; color: #fbbf24;">Educational purposes only. Not financial advice.</p>
+          <p style="margin: 6px 0 0;">${DISCLAIMER_FULL.join(' ')}</p>
         </div>
       </div>
     `;
@@ -91,6 +94,9 @@ ${alertType === 'breakout'
 Time: ${new Date().toLocaleString()}
 
 Mobile Tip: Forward this email to your carrier's SMS gateway for text alerts.
+
+EDUCATIONAL PURPOSES ONLY. NOT FINANCIAL ADVICE.
+${DISCLAIMER_FULL.join(' ')}
     `;
 
     const request = mailjet.post('send', { version: 'v3.1' }).request({

@@ -16,6 +16,7 @@ export interface IStorage {
   createUser(user: InsertUser): Promise<User>;
   updateUserProfile(id: number, updates: { username?: string; emailAlerts?: boolean; tradingBankroll?: string }): Promise<User | undefined>;
   updateUserPassword(id: number, passwordHash: string): Promise<void>;
+  acceptDisclaimer(id: number): Promise<Date | null>;
   getStocks(): Promise<Stock[]>;
   getStock(symbol: string): Promise<Stock | undefined>;
   createStock(stock: InsertStock): Promise<Stock>;
@@ -74,6 +75,14 @@ export class DatabaseStorage implements IStorage {
   }
   async updateUserPassword(id: number, passwordHash: string): Promise<void> {
     await db.update(users).set({ password: passwordHash }).where(eq(users.id, id));
+  }
+  // Records when the user accepted the disclaimer; keeps the first acceptance time.
+  async acceptDisclaimer(id: number): Promise<Date | null> {
+    const [row] = await db.update(users)
+      .set({ disclaimerAcceptedAt: sql`coalesce(${users.disclaimerAcceptedAt}, now())` })
+      .where(eq(users.id, id))
+      .returning({ disclaimerAcceptedAt: users.disclaimerAcceptedAt });
+    return row?.disclaimerAcceptedAt ?? null;
   }
   async getStocks(): Promise<Stock[]> {
     return await db.select().from(stocks);

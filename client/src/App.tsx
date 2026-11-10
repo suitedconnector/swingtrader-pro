@@ -7,6 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { AppShell } from "@/components/layout/AppShell";
+import { DisclaimerGate } from "@/components/layout/Disclaimer";
 import Overview from "@/pages/Overview";
 import Scanner from "@/pages/Scanner";
 import Watchlists from "@/pages/Watchlists";
@@ -14,6 +15,7 @@ import Alerts from "@/pages/Alerts";
 import TradePlanner from "@/pages/TradePlanner";
 import Positions from "@/pages/Positions";
 import Journal from "@/pages/Journal";
+import Learn from "@/pages/Learn";
 import Profile from "@/pages/Profile";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
@@ -29,7 +31,12 @@ function AuthGate({ children }: { children: ReactNode }) {
 
   if (!user) return <Login />;
 
-  return <>{children}</>;
+  return (
+    <>
+      {children}
+      <DisclaimerGate accepted={!!user.disclaimerAcceptedAt} />
+    </>
+  );
 }
 
 function AppRoutes() {
@@ -44,6 +51,7 @@ function AppRoutes() {
           <Route path="/plan" component={TradePlanner} />
           <Route path="/positions" component={Positions} />
           <Route path="/journal" component={Journal} />
+          <Route path="/learn" component={Learn} />
           <Route path="/profile" component={Profile} />
           <Route component={NotFound} />
         </Switch>

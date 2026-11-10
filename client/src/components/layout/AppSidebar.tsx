@@ -5,6 +5,7 @@ import {
   BookOpen,
   Calculator,
   ChartLine,
+  GraduationCap,
   LayoutGrid,
   ListChecks,
   LogOut,
@@ -46,6 +47,7 @@ export const NAV_ITEMS: NavItem[] = [
   { title: 'Trade Planner', href: '/plan', icon: Calculator },
   { title: 'Positions', href: '/positions', icon: ChartLine },
   { title: 'Journal', href: '/journal', icon: BookOpen },
+  { title: 'Learn', href: '/learn', icon: GraduationCap },
 ];
 
 // Active item: no filled background; a short, thick accent line on the left.
