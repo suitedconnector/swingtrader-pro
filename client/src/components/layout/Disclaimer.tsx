@@ -48,7 +48,10 @@ export function DisclaimerGate({ accepted }: { accepted: boolean }) {
     setBusy(true);
     setError('');
     try {
-      await apiRequest('POST', '/api/disclaimer/accept');
+      const res = await apiRequest('POST', '/api/disclaimer/accept');
+      // Only a JSON answer with a saved time counts as accepted.
+      const data = await res.json().catch(() => null);
+      if (!data?.disclaimerAcceptedAt) throw new Error('Acceptance was not saved');
       await queryClient.invalidateQueries({ queryKey: ['/api/user'] });
     } catch {
       setError('Could not save. Check your connection and try again.');

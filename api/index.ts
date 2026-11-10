@@ -48,6 +48,12 @@ app.use((req, res, next) => {
 (async () => {
   const server = await registerRoutes(app);
 
+  // Any /api address no route answered is an error, not a page: without this,
+  // the client fallback below would send index.html with a 200, and callers
+  // would think the request succeeded.
+  app.use("/api", (_req, res) => {
+    res.status(404).json({ message: "Not found" });
+  });
 
 
   // importantly only setup vite in development and after
