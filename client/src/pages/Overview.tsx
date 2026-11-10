@@ -83,7 +83,9 @@ export default function Overview() {
 
   const openTrades = trades.filter((t) => t.status === 'active');
   const closedTrades = trades.filter((t) => t.status === 'closed' && t.pnl !== null);
-  const wins = closedTrades.filter((t) => Number(t.pnl) > 0).length;
+  // Trims count toward realized P&L, but trade count and win rate use full closes only.
+  const fullCloses = closedTrades.filter((t) => t.exitReason !== 'trim');
+  const wins = fullCloses.filter((t) => Number(t.pnl) > 0).length;
   const realized = closedTrades.reduce((sum, t) => sum + (Number(t.pnl) || 0), 0);
   const openRisk = openTrades.reduce((sum, t) => sum + (Number(t.riskAmount) || 0), 0);
   const activeAlerts = alerts.filter((a) => a.isActive);
@@ -126,14 +128,14 @@ export default function Overview() {
         <Stat
           label="Realized P&L"
           value={`${realized > 0 ? '+' : ''}${usd(realized)}`}
-          hint={`${closedTrades.length} closed ${closedTrades.length === 1 ? 'trade' : 'trades'}`}
+          hint={`${fullCloses.length} closed ${fullCloses.length === 1 ? 'trade' : 'trades'}`}
           signal={realizedSignal}
           colorValue={realized !== 0}
         />
         <Stat
           label="Win rate"
-          value={closedTrades.length ? `${((wins / closedTrades.length) * 100).toFixed(0)}%` : '—'}
-          hint={closedTrades.length ? `${wins} of ${closedTrades.length}` : 'No closed trades yet'}
+          value={fullCloses.length ? `${((wins / fullCloses.length) * 100).toFixed(0)}%` : '—'}
+          hint={fullCloses.length ? `${wins} of ${fullCloses.length}` : 'No closed trades yet'}
         />
       </div>
 

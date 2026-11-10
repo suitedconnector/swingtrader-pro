@@ -39,6 +39,13 @@ const tradePatchSchema = z
   .strict()
   .refine((u) => Object.keys(u).length > 0, { message: "No fields to update" });
 
+const tradeTrimSchema = z
+  .object({
+    shares: z.number().int().positive(),
+    exitPrice: positiveDecimal,
+  })
+  .strict();
+
 // Simple in-memory rate limiter with expiration
 const rateLimits = new Map<string, { count: number; expiresAt: number }>();
 
@@ -383,6 +390,25 @@ export async function registerRoutes(app: Express) {
   app.delete("/api/watchlists/:id", safe(async (req, res) => { if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" }); const deleted = await storage.deleteWatchlist(parseInt(req.params.id), req.user.id); if (!deleted) return res.status(404).json({ message: "Not found" }); res.status(204).send(); }));
   app.get("/api/trades", (req, res, next) => { if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" }); storage.getTrades(req.user.id).then(d => res.json(d)).catch(next); });
   app.post("/api/trades", safe(async (req, res) => { if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" }); const t = await storage.createTrade({ ...req.body, userId: req.user.id }); res.status(201).json(t); }));
+  // Sell part of an open trade: saves the sold shares as a closed "trim" trade
+  // with its P&L and lowers the open trade's shares and risk.
+  app.post("/api/trades/:id/trim", safe(async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" });
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ message: "Invalid trade id" });
+    const parsed = tradeTrimSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid trim", errors: parsed.error.flatten().fieldErrors });
+    }
+    const userId = (req.user as { id: number }).id;
+    const result = await storage.trimTrade(id, userId, parsed.data.shares, parsed.data.exitPrice);
+    if (!result.ok) {
+      return result.reason === "not_found"
+        ? res.status(404).json({ message: "Open trade not found" })
+        : res.status(400).json({ message: "A trim must leave at least one share. Use Exit to sell them all." });
+    }
+    res.status(201).json({ trim: result.trim, remaining: result.remaining });
+  }));
   app.patch("/api/trades/:id", async (req, res, next) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" });
     const id = Number(req.params.id);

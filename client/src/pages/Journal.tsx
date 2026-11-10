@@ -10,6 +10,7 @@ const EXIT_REASONS: Record<string, string> = {
   stop_loss: 'Stop hit',
   profit_target: 'Target hit',
   manual_exit: 'Manual',
+  trim: 'Trim',
 };
 
 const usd = (n: number, digits = 2) =>
@@ -45,15 +46,19 @@ export default function Journal() {
     .filter((t) => t.status === 'closed')
     .sort((a, b) => time(b.exitDate ?? b.entryDate) - time(a.exitDate ?? a.entryDate));
   const pnlOf = (t: Trade) => Number(t.pnl) || 0;
-  const wins = closed.filter((t) => pnlOf(t) > 0);
-  const losses = closed.filter((t) => pnlOf(t) < 0);
+  // Trims (part of a position sold early) count toward P&L totals, but win
+  // rate, trade count and average win/loss use full closes only.
+  const fullCloses = closed.filter((t) => t.exitReason !== 'trim');
+  const wins = fullCloses.filter((t) => pnlOf(t) > 0);
+  const losses = fullCloses.filter((t) => pnlOf(t) < 0);
 
   const totalPnl = closed.reduce((s, t) => s + pnlOf(t), 0);
-  const grossWin = wins.reduce((s, t) => s + pnlOf(t), 0);
-  const grossLoss = Math.abs(losses.reduce((s, t) => s + pnlOf(t), 0));
-  const winRate = closed.length ? (wins.length / closed.length) * 100 : null;
-  const avgWin = wins.length ? grossWin / wins.length : null;
-  const avgLoss = losses.length ? grossLoss / losses.length : null;
+  const grossWin = closed.filter((t) => pnlOf(t) > 0).reduce((s, t) => s + pnlOf(t), 0);
+  const grossLoss = Math.abs(closed.filter((t) => pnlOf(t) < 0).reduce((s, t) => s + pnlOf(t), 0));
+  const winRate = fullCloses.length ? (wins.length / fullCloses.length) * 100 : null;
+  const avgWin = wins.length ? wins.reduce((s, t) => s + pnlOf(t), 0) / wins.length : null;
+  const avgLoss = losses.length ? Math.abs(losses.reduce((s, t) => s + pnlOf(t), 0)) / losses.length : null;
+  const trimCount = closed.length - fullCloses.length;
   const profitFactor = grossLoss > 0 ? grossWin / grossLoss : null;
   const payoff = avgWin !== null && avgLoss !== null ? avgWin / avgLoss : null;
 
@@ -74,14 +79,18 @@ export default function Journal() {
         <Stat
           label="Win rate"
           value={winRate !== null ? `${winRate.toFixed(0)}%` : '—'}
-          hint={closed.length ? `${wins.length} won · ${losses.length} lost` : 'No closed trades yet'}
+          hint={fullCloses.length ? `${wins.length} won · ${losses.length} lost` : 'No closed trades yet'}
         />
         <Stat
           label="Profit factor"
           value={profitFactor !== null ? profitFactor.toFixed(2) : '—'}
           hint="Gross wins ÷ gross losses"
         />
-        <Stat label="Trades" value={closed.length} hint={`${openCount} still open`} />
+        <Stat
+          label="Trades"
+          value={fullCloses.length}
+          hint={`${openCount} still open${trimCount ? ` · ${trimCount} ${trimCount === 1 ? 'trim' : 'trims'}` : ''}`}
+        />
       </div>
 
       <div className="grid gap-x-16 lg:grid-cols-3">
