@@ -8,14 +8,22 @@ interface LearnLink {
   source: string;
 }
 
-// Quizzes hosted elsewhere. Google does not allow NotebookLM pages inside
-// other sites, so each opens in a new tab.
-const QUIZZES: LearnLink[] = [
+// Learning material hosted elsewhere, grouped by kind. Google does not allow
+// NotebookLM pages inside other sites, so each link opens in a new tab.
+// Add a link to a group's list to publish it; empty groups are not shown.
+const GROUPS: { title: string; links: LearnLink[] }[] = [
+  { title: 'Content', links: [] },
+  { title: 'Flashcards', links: [] },
   {
-    title: 'Breakout Strategy Quiz',
-    description: 'Test what you know about trading breakouts.',
-    href: 'https://notebooklm.link.google/bLcuyDC5R44e',
-    source: 'NotebookLM',
+    title: 'Quizzes',
+    links: [
+      {
+        title: 'Breakout Strategy Quiz',
+        description: 'Test what you know about trading breakouts.',
+        href: 'https://notebooklm.link.google/bLcuyDC5R44e',
+        source: 'NotebookLM',
+      },
+    ],
   },
 ];
 
@@ -53,16 +61,14 @@ export default function Learn() {
       <PageHeader title="Learn" description="Lessons, flashcards and quizzes on swing trading." />
 
       <div className="max-w-3xl">
-        <Section title={`Quizzes · ${QUIZZES.length}`}>
-          <LinkList items={QUIZZES} />
-          <p className="pt-3 text-xs text-muted-foreground">
-            Quizzes open in a new tab. NotebookLM may ask you to sign in with Google.
-          </p>
-        </Section>
-
-        <Section title="Content and flashcards">
-          <p className="text-sm text-muted-foreground">Coming soon.</p>
-        </Section>
+        {GROUPS.filter((group) => group.links.length > 0).map((group) => (
+          <Section key={group.title} title={`${group.title} · ${group.links.length}`}>
+            <LinkList items={group.links} />
+          </Section>
+        ))}
+        <p className="text-xs text-muted-foreground">
+          Links open in a new tab. NotebookLM may ask you to sign in with Google.
+        </p>
       </div>
     </>
   );
